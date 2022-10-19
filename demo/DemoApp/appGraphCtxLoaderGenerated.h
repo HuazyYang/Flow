@@ -37,6 +37,8 @@ typedef void  (*AppGraphCtxProfileBegin_ptr_t)(AppGraphCtx*  context, const char
 typedef void  (*AppGraphCtxProfileEnd_ptr_t)(AppGraphCtx*  context, const char*  label);
 typedef bool  (*AppGraphCtxProfileGet_ptr_t)(AppGraphCtx*  context, const char**  plabel, float*  cpuTime, float*  gpuTime, int  index);
 typedef size_t  (*AppGraphCtxDedicatedVideoMemory_ptr_t)(AppGraphCtx*  context);
+typedef void  (*AppGraphCtxBeginMarker_ptr_t)(AppGraphCtx*  context, const char*  label);
+typedef void  (*AppGraphCtxEndMarker_ptr_t)(AppGraphCtx*  context);
 
 struct AppGraphCtxLoader 
 { 
@@ -56,6 +58,8 @@ struct AppGraphCtxLoader
 	AppGraphCtxProfileEnd_ptr_t AppGraphCtxProfileEnd_ptr;
 	AppGraphCtxProfileGet_ptr_t AppGraphCtxProfileGet_ptr;
 	AppGraphCtxDedicatedVideoMemory_ptr_t AppGraphCtxDedicatedVideoMemory_ptr;
+	AppGraphCtxBeginMarker_ptr_t AppGraphCtxBeginMarker_ptr;
+	AppGraphCtxEndMarker_ptr_t AppGraphCtxEndMarker_ptr;
 
 }gAppGraphCtxLoader; 
 
@@ -119,6 +123,16 @@ size_t  AppGraphCtxDedicatedVideoMemory(AppGraphCtx*  context)
 	return gAppGraphCtxLoader.AppGraphCtxDedicatedVideoMemory_ptr(context);
 }
 
+void  AppGraphCtxBeginMarker(AppGraphCtx*  context, const char*  label)
+{
+	return gAppGraphCtxLoader.AppGraphCtxBeginMarker_ptr(context, label);
+}
+
+void  AppGraphCtxEndMarker(AppGraphCtx*  context)
+{
+	return gAppGraphCtxLoader.AppGraphCtxEndMarker_ptr(context);
+}
+
 void* appGraphCtxLoaderLoadFunction(AppGraphCtxLoader* inst, const char* name)
 {
 	snprintf(inst->buf, 1024u, "%s%s", name, inst->suffix);
@@ -146,6 +160,8 @@ void loadAppGraphCtx(AppGraphCtxType type)
 	gAppGraphCtxLoader.AppGraphCtxProfileEnd_ptr = (AppGraphCtxProfileEnd_ptr_t)(appGraphCtxLoaderLoadFunction(&gAppGraphCtxLoader, "AppGraphCtxProfileEnd"));
 	gAppGraphCtxLoader.AppGraphCtxProfileGet_ptr = (AppGraphCtxProfileGet_ptr_t)(appGraphCtxLoaderLoadFunction(&gAppGraphCtxLoader, "AppGraphCtxProfileGet"));
 	gAppGraphCtxLoader.AppGraphCtxDedicatedVideoMemory_ptr = (AppGraphCtxDedicatedVideoMemory_ptr_t)(appGraphCtxLoaderLoadFunction(&gAppGraphCtxLoader, "AppGraphCtxDedicatedVideoMemory"));
+	gAppGraphCtxLoader.AppGraphCtxBeginMarker_ptr = (AppGraphCtxBeginMarker_ptr_t)(appGraphCtxLoaderLoadFunction(&gAppGraphCtxLoader, "AppGraphCtxBeginMarker"));
+	gAppGraphCtxLoader.AppGraphCtxEndMarker_ptr = (AppGraphCtxEndMarker_ptr_t)(appGraphCtxLoaderLoadFunction(&gAppGraphCtxLoader, "AppGraphCtxEndMarker"));
 }
 
 void unloadAppGraphCtx()
@@ -162,6 +178,8 @@ void unloadAppGraphCtx()
 	gAppGraphCtxLoader.AppGraphCtxProfileEnd_ptr = nullptr;
 	gAppGraphCtxLoader.AppGraphCtxProfileGet_ptr = nullptr;
 	gAppGraphCtxLoader.AppGraphCtxDedicatedVideoMemory_ptr = nullptr;
+	gAppGraphCtxLoader.AppGraphCtxBeginMarker_ptr = nullptr;
+	gAppGraphCtxLoader.AppGraphCtxEndMarker_ptr = nullptr;
 
 	SDL_UnloadObject(gAppGraphCtxLoader.module);
 }

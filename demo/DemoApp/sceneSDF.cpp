@@ -45,6 +45,8 @@ namespace Preset1
 
 #include <SDL.h>
 
+#include "traceUtils.h"
+
 void SceneSDFTest::initParams()
 {
 	m_flowGridActor.initParams(AppGraphCtxDedicatedVideoMemory(m_appctx));
@@ -94,7 +96,7 @@ void SceneSDFTest::init(AppGraphCtx* appctx, int winw, int winh)
 	NvFlowSDFGenDesc sdfDesc;
 	sdfDesc.resolution = { 128u, 128u, 128u };
 
-	m_sdfGen = NvFlowCreateSDFGen(m_flowContext.m_gridContext, &sdfDesc);
+	m_sdfGen = TRACE(NvFlowCreateSDFGen(m_flowContext.m_gridContext, &sdfDesc));
 
 	m_meshContext = MeshInteropContextCreate(appctx);
 	m_mesh = MeshCreate(m_meshContext);
@@ -104,7 +106,7 @@ void SceneSDFTest::init(AppGraphCtx* appctx, int winw, int winh)
 	MeshData meshData;
 	MeshGetData(m_mesh, &meshData);
 
-	NvFlowSDFGenReset(m_sdfGen, m_flowContext.m_gridContext);
+	TRACE(NvFlowSDFGenReset(m_sdfGen, m_flowContext.m_gridContext));
 
 	XMMATRIX modelMatrix = XMMatrixMultiply(
 		XMMatrixScaling(8.f, 8.f, 8.f),
@@ -123,14 +125,14 @@ void SceneSDFTest::init(AppGraphCtx* appctx, int winw, int winh)
 	meshParams.renderTargetView = m_flowContext.m_multiGPUActive ? nullptr : m_flowContext.m_rtv;
 	meshParams.depthStencilView = m_flowContext.m_multiGPUActive ? nullptr : m_flowContext.m_dsv;
 
-	NvFlowSDFGenVoxelize(m_sdfGen, m_flowContext.m_gridContext, &meshParams);
+	TRACE(NvFlowSDFGenVoxelize(m_sdfGen, m_flowContext.m_gridContext, &meshParams));
 
-	NvFlowSDFGenUpdate(m_sdfGen, m_flowContext.m_gridContext);
+	TRACE(NvFlowSDFGenUpdate(m_sdfGen, m_flowContext.m_gridContext));
 
 	// create shape from SDF
 	m_shape = NvFlowCreateShapeSDFFromTexture3D(
 		m_flowContext.m_gridContext, 
-		NvFlowSDFGenShape(m_sdfGen, m_flowContext.m_gridContext)
+		TRACE(NvFlowSDFGenShape(m_sdfGen, m_flowContext.m_gridContext))
 	);
 
 	// create default color map
@@ -170,10 +172,10 @@ void SceneSDFTest::doUpdate(float dt)
 			m_emitParams.shapeType = eNvFlowShapeTypeSDF;
 			m_emitParams.deltaTime = dt;
 
-			NvFlowGridEmit(m_flowGridActor.m_grid, &shapeDesc, 1u, &m_emitParams, 1u);
+			TRACE(NvFlowGridEmit(m_flowGridActor.m_grid, &shapeDesc, 1u, &m_emitParams, 1u));
 
 			NvFlowShapeSDF* sdfs[] = { m_shape };
-			NvFlowGridUpdateEmitSDFs(m_flowGridActor.m_grid, sdfs, 1u);
+			TRACE(NvFlowGridUpdateEmitSDFs(m_flowGridActor.m_grid, sdfs, 1u));
 
 			m_projectile.update(m_flowContext.m_gridContext, m_flowGridActor.m_grid, dt);
 
@@ -228,9 +230,9 @@ void SceneSDFTest::draw(DirectX::CXMMATRIX projection, DirectX::CXMMATRIX view)
 	m_renderParams.depthStencilView = m_dsv;
 	m_renderParams.renderTargetView = m_rtv;
 
-	auto texture = NvFlowSDFGenShape(m_sdfGen, m_context);
+	auto texture = TRACE(NvFlowSDFGenShape(m_sdfGen, m_context));
 
-	NvFlowVolumeRenderTexture3D(m_volumeRender, m_context, texture, &m_renderParams);
+	TRACE(NvFlowVolumeRenderTexture3D(m_volumeRender, m_context, texture, &m_renderParams));
 #endif
 
 	m_flowGridActor.draw(&m_flowContext, projection, view);
@@ -244,9 +246,9 @@ void SceneSDFTest::release()
 
 	m_flowGridActor.release();
 
-	NvFlowReleaseShapeSDF(m_shape);
+	TRACE(NvFlowReleaseShapeSDF(m_shape));
 
-	NvFlowReleaseSDFGen(m_sdfGen);
+	TRACE(NvFlowReleaseSDFGen(m_sdfGen));
 
 	m_flowContext.release();
 
@@ -280,12 +282,12 @@ void SceneCustomLighting::init(AppGraphCtx* context, int winw, int winh)
 {
 	SceneSDFTest::init(context, winw, winh);
 
-	auto gridExport = NvFlowGridProxyGetGridExport(m_flowGridActor.m_gridProxy, m_flowContext.m_renderContext);
+	auto gridExport = TRACE(NvFlowGridProxyGetGridExport(m_flowGridActor.m_gridProxy, m_flowContext.m_renderContext));
 
 	NvFlowGridImportDesc importDesc = {};
 	importDesc.gridExport = gridExport;
 
-	m_import = NvFlowCreateGridImport(m_flowContext.m_renderContext, &importDesc);
+	m_import = TRACE(NvFlowCreateGridImport(m_flowContext.m_renderContext, &importDesc));
 
 	// create compute resources
 	m_computeContext = ComputeContextNvFlowContextCreate(m_flowContext.m_renderContext);
@@ -320,10 +322,10 @@ void SceneCustomLighting::doUpdate(float dt)
 			m_emitParams.shapeType = eNvFlowShapeTypeSDF;
 			m_emitParams.deltaTime = dt;
 
-			NvFlowGridEmit(m_flowGridActor.m_grid, &shapeDesc, 1u, &m_emitParams, 1u);
+			TRACE(NvFlowGridEmit(m_flowGridActor.m_grid, &shapeDesc, 1u, &m_emitParams, 1u));
 
 			NvFlowShapeSDF* sdfs[] = { m_shape };
-			NvFlowGridUpdateEmitSDFs(m_flowGridActor.m_grid, sdfs, 1u);
+			TRACE(NvFlowGridUpdateEmitSDFs(m_flowGridActor.m_grid, sdfs, 1u));
 
 			m_projectile.update(m_flowContext.m_gridContext, m_flowGridActor.m_grid, dt);
 
@@ -343,7 +345,7 @@ void SceneCustomLighting::preDraw()
 {
 	m_flowContext.preDrawBegin();
 
-	//auto gridView = NvFlowGridGetGridView(m_grid, m_context);
+	//auto gridView = TRACE(NvFlowGridGetGridView(m_grid, m_context));
 
 	AppGraphCtxProfileBegin(m_appctx, "UpdateGridView");
 
@@ -351,9 +353,9 @@ void SceneCustomLighting::preDraw()
 	flushParams.gridContext = m_flowContext.m_gridContext;
 	flushParams.gridCopyContext = m_flowContext.m_gridCopyContext;
 	flushParams.renderCopyContext = m_flowContext.m_renderCopyContext;
-	NvFlowGridProxyFlush(m_flowGridActor.m_gridProxy, &flushParams);
+	TRACE(NvFlowGridProxyFlush(m_flowGridActor.m_gridProxy, &flushParams));
 
-	auto gridExport = NvFlowGridProxyGetGridExport(m_flowGridActor.m_gridProxy, m_flowContext.m_renderContext);
+	auto gridExport = TRACE(NvFlowGridProxyGetGridExport(m_flowGridActor.m_gridProxy, m_flowContext.m_renderContext));
 
 	AppGraphCtxProfileEnd(m_appctx, "UpdateGridView");
 
@@ -362,21 +364,21 @@ void SceneCustomLighting::preDraw()
 	// Only layer 0 for the moment
 	NvFlowUint layerIdx = 0u;
 
-	NvFlowGridExportHandle exportHandle = NvFlowGridExportGetHandle(gridExport, m_flowContext.m_renderContext, eNvFlowGridTextureChannelDensity);
+	NvFlowGridExportHandle exportHandle = TRACE(NvFlowGridExportGetHandle(gridExport, m_flowContext.m_renderContext, eNvFlowGridTextureChannelDensity));
 	NvFlowGridExportLayeredView exportLayeredView;
-	NvFlowGridExportGetLayeredView(exportHandle, &exportLayeredView);
+	TRACE(NvFlowGridExportGetLayeredView(exportHandle, &exportLayeredView));
 	NvFlowGridExportLayerView exportLayerView;
-	NvFlowGridExportGetLayerView(exportHandle, layerIdx, &exportLayerView);
+	TRACE(NvFlowGridExportGetLayerView(exportHandle, layerIdx, &exportLayerView));
 
 	NvFlowGridImportParams importParams = {};
 	importParams.gridExport = gridExport;
 	importParams.channel = eNvFlowGridTextureChannelDensity;
 	importParams.importMode = eNvFlowGridImportModePoint;
-	NvFlowGridImportHandle importHandle = NvFlowGridImportGetHandle(m_import, m_flowContext.m_renderContext, &importParams);
+	NvFlowGridImportHandle importHandle = TRACE(NvFlowGridImportGetHandle(m_import, m_flowContext.m_renderContext, &importParams));
 	NvFlowGridImportLayeredView importLayeredView;
-	NvFlowGridImportGetLayeredView(importHandle, &importLayeredView);
+	TRACE(NvFlowGridImportGetLayeredView(importHandle, &importLayeredView));
 	NvFlowGridImportLayerView importLayerView;
-	NvFlowGridImportGetLayerView(importHandle, layerIdx, &importLayerView);
+	TRACE(NvFlowGridImportGetLayerView(importHandle, layerIdx, &importLayerView));
 
 	// convert resource from NvFlow types to ComputeResource types
 	{
@@ -473,7 +475,7 @@ void SceneCustomLighting::preDraw()
 	AppGraphCtxProfileBegin(m_appctx, "CustomImport");
 
 	// override original gridExport
-	gridExport = NvFlowGridImportGetGridExport(m_import, m_flowContext.m_renderContext);
+	gridExport = TRACE(NvFlowGridImportGetGridExport(m_import, m_flowContext.m_renderContext));
 
 	AppGraphCtxProfileEnd(m_appctx, "CustomImport");
 
@@ -496,7 +498,7 @@ void SceneCustomLighting::draw(DirectX::CXMMATRIX projection, DirectX::CXMMATRIX
 
 void SceneCustomLighting::release()
 {
-	NvFlowReleaseGridImport(m_import);
+	TRACE(NvFlowReleaseGridImport(m_import));
 
 	// release compute resources
 	ComputeConstantBufferRelease(m_computeConstantBuffer);

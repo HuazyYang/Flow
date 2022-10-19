@@ -40,6 +40,7 @@ namespace PresetFlame
 #include "scene.h"
 
 #include <SDL.h>
+#include "traceUtils.h"
 
 void SceneSimpleFlame::initParams()
 {
@@ -76,11 +77,11 @@ void SceneSimpleFlame::init(AppGraphCtx* appctx, int winw, int winh)
 	// more compute resources
 	NvFlowShapeSDFDesc shapeDesc;
 	NvFlowShapeSDFDescDefaults(&shapeDesc);
-	m_shape = NvFlowCreateShapeSDF(m_flowContext.m_gridContext, &shapeDesc);
+	m_shape = TRACE(NvFlowCreateShapeSDF(m_flowContext.m_gridContext, &shapeDesc));
 
 	// generate sphere SDF
 	const float radius = 0.8f;
-	auto mappedData = NvFlowShapeSDFMap(m_shape, m_flowContext.m_gridContext);
+	auto mappedData = TRACE(NvFlowShapeSDFMap(m_shape, m_flowContext.m_gridContext));
 	if (mappedData.data)
 	{
 		for (NvFlowUint k = 0; k < mappedData.dim.z; k++)
@@ -98,7 +99,7 @@ void SceneSimpleFlame::init(AppGraphCtx* appctx, int winw, int winh)
 
 					val = v;
 				}
-		NvFlowShapeSDFUnmap(m_shape, m_flowContext.m_gridContext);
+		TRACE(NvFlowShapeSDFUnmap(m_shape, m_flowContext.m_gridContext));
 	}
 
 	// create default color map
@@ -139,7 +140,7 @@ void SceneSimpleFlame::doUpdate(float dt)
 			m_emitParams.shapeType = eNvFlowShapeTypeSphere;
 			m_emitParams.deltaTime = dt;
 
-			NvFlowGridEmit(m_flowGridActor.m_grid, &shapeDesc, 1u, &m_emitParams, 1u);
+			TRACE(NvFlowGridEmit(m_flowGridActor.m_grid, &shapeDesc, 1u, &m_emitParams, 1u));
 
 			m_projectile.update(m_flowContext.m_gridContext, m_flowGridActor.m_grid, dt);
 		}
@@ -179,7 +180,7 @@ void SceneSimpleFlame::release()
 
 	m_flowGridActor.release();
 
-	NvFlowReleaseShapeSDF(m_shape);
+	TRACE(NvFlowReleaseShapeSDF(m_shape));
 
 	m_flowContext.release();
 }
@@ -204,7 +205,7 @@ void SceneSimpleFlameDouble::init(AppGraphCtx* context, int winw, int winh)
 	NvFlowGridMaterialParams materialParams = {};
 	NvFlowGridMaterialParamsDefaults(&materialParams);
 
-	m_materialA = NvFlowGridCreateMaterial(m_flowGridActor.m_grid, &materialParams);
+	m_materialA = TRACE(NvFlowGridCreateMaterial(m_flowGridActor.m_grid, &materialParams));
 
 	materialParams.vorticityStrength = 5.f;
 	materialParams.vorticityVelocityMask = 0.f;
@@ -213,7 +214,7 @@ void SceneSimpleFlameDouble::init(AppGraphCtx* context, int winw, int winh)
 	materialParams.smoke.macCormackBlendFactor = 0.75f;
 	materialParams.buoyancyPerTemp *= 5.f;
 
-	m_materialB = NvFlowGridCreateMaterial(m_flowGridActor.m_grid, &materialParams);
+	m_materialB = TRACE(NvFlowGridCreateMaterial(m_flowGridActor.m_grid, &materialParams));
 
 	m_flowGridActor.m_renderMaterialMat0Params.material = m_materialA;
 	m_flowGridActor.m_renderMaterialMat1Params.material = m_materialB;
@@ -230,7 +231,7 @@ void SceneSimpleFlameDouble::doUpdate(float dt)
 
 		NvFlowGridMaterialHandle emitMaterials[2u] = { m_materialA, m_materialB };
 
-		NvFlowGridUpdateEmitMaterials(m_flowGridActor.m_grid, emitMaterials, 2u);
+		TRACE(NvFlowGridUpdateEmitMaterials(m_flowGridActor.m_grid, emitMaterials, 2u));
 
 		// emit
 		{
@@ -246,14 +247,14 @@ void SceneSimpleFlameDouble::doUpdate(float dt)
 			m_emitParamsA.bounds.w.x = +0.25f;
 			m_emitParamsA.localToWorld = m_emitParamsA.bounds;
 			m_emitParamsA.velocityLinear.x = -8.f;
-			NvFlowGridEmit(m_flowGridActor.m_grid, &shapeDesc, 1u, &m_emitParamsA, 1u);
+			TRACE(NvFlowGridEmit(m_flowGridActor.m_grid, &shapeDesc, 1u, &m_emitParamsA, 1u));
 
 			m_emitParamsB = m_emitParams;
 			m_emitParamsB.emitMaterialIndex = 1u;
 			m_emitParamsB.bounds.w.x = -0.25f;
 			m_emitParamsB.localToWorld = m_emitParamsB.bounds;
 			m_emitParamsB.velocityLinear.x = +8.f;
-			NvFlowGridEmit(m_flowGridActor.m_grid, &shapeDesc, 1u, &m_emitParamsB, 1u);
+			TRACE(NvFlowGridEmit(m_flowGridActor.m_grid, &shapeDesc, 1u, &m_emitParamsB, 1u));
 
 			m_projectile.update(m_flowContext.m_gridContext, m_flowGridActor.m_grid, dt);
 		}
@@ -311,7 +312,7 @@ void SceneSimpleFlameFuelMap::init(AppGraphCtx* context, int winw, int winh)
 {
 	SceneSimpleFlame::init(context, winw, winh);
 
-	m_flowGridActor.m_renderMaterialMat0Params.material = NvFlowGridGetDefaultMaterial(m_flowGridActor.m_grid);
+	m_flowGridActor.m_renderMaterialMat0Params.material = TRACE(NvFlowGridGetDefaultMaterial(m_flowGridActor.m_grid));
 
 	m_flowGridActor.m_renderMaterialMat0Params.colorMapCompMask = { 0.f, 4.f, 0.f, 0.f };
 	m_flowGridActor.m_renderMaterialMat0Params.alphaCompMask = { 0.f, 1.f, 0.f, 0.f };
@@ -338,7 +339,7 @@ void SceneSimpleFlameFuelMap::doUpdate(float dt)
 			m_emitParams.shapeType = eNvFlowShapeTypeSphere;
 			m_emitParams.deltaTime = dt;
 
-			NvFlowGridEmit(m_flowGridActor.m_grid, &shapeDesc, 1u, &m_emitParams, 1u);
+			TRACE(NvFlowGridEmit(m_flowGridActor.m_grid, &shapeDesc, 1u, &m_emitParams, 1u));
 
 			m_projectile.update(m_flowContext.m_gridContext, m_flowGridActor.m_grid, dt);
 		}
@@ -403,13 +404,13 @@ void SceneSimpleFlameParticleSurface::init(AppGraphCtx* context, int winw, int w
 	surfaceDesc.residentScale = 0.125f * 0.125f;
 	surfaceDesc.maxParticles = 64u * 1024u;	
 
-	m_particleSurface = NvFlowCreateParticleSurface(m_flowContext.m_gridContext, &surfaceDesc);
+	m_particleSurface = TRACE(NvFlowCreateParticleSurface(m_flowContext.m_gridContext, &surfaceDesc));
 
 	if (!m_visualizeSurface)
 	{
-		NvFlowGridEmitCustomRegisterAllocFunc(m_flowGridActor.m_grid, emitCustomAllocFunc, this);
-		NvFlowGridEmitCustomRegisterEmitFunc(m_flowGridActor.m_grid, eNvFlowGridTextureChannelVelocity, emitCustomEmitVelocityFunc, this);
-		NvFlowGridEmitCustomRegisterEmitFunc(m_flowGridActor.m_grid, eNvFlowGridTextureChannelDensity, emitCustomEmitDensityFunc, this);
+		TRACE(NvFlowGridEmitCustomRegisterAllocFunc(m_flowGridActor.m_grid, emitCustomAllocFunc, this));
+		TRACE(NvFlowGridEmitCustomRegisterEmitFunc(m_flowGridActor.m_grid, eNvFlowGridTextureChannelVelocity, emitCustomEmitVelocityFunc, this));
+		TRACE(NvFlowGridEmitCustomRegisterEmitFunc(m_flowGridActor.m_grid, eNvFlowGridTextureChannelDensity, emitCustomEmitDensityFunc, this));
 	}
 
 	// generate positions
@@ -435,7 +436,7 @@ void SceneSimpleFlameParticleSurface::init(AppGraphCtx* context, int winw, int w
 	}
 
 	m_flowGridActor.m_renderMaterialDefaultParams.material = NvFlowGridMaterialHandle{ nullptr, 1u };
-	m_flowGridActor.m_renderMaterialMat0Params.material = NvFlowGridGetDefaultMaterial(m_flowGridActor.m_grid);
+	m_flowGridActor.m_renderMaterialMat0Params.material = TRACE(NvFlowGridGetDefaultMaterial(m_flowGridActor.m_grid));
 
 	m_particleParams.smoothRadius = 16.f;
 	m_particleParams.surfaceThreshold = 0.001f;
@@ -459,17 +460,17 @@ void SceneSimpleFlameParticleSurface::emitCustomEmitDensityFunc(void* userdata, 
 
 void SceneSimpleFlameParticleSurface::doEmitCustomAllocFunc(const NvFlowGridEmitCustomAllocParams* params)
 {
-	NvFlowParticleSurfaceAllocFunc(m_particleSurface, m_flowContext.m_gridContext, params);
+	TRACE(NvFlowParticleSurfaceAllocFunc(m_particleSurface, m_flowContext.m_gridContext, params));
 }
 
 void SceneSimpleFlameParticleSurface::doEmitCustomEmitVelocityFunc(NvFlowUint* dataFrontIdx, const NvFlowGridEmitCustomEmitParams* params)
 {
-	NvFlowParticleSurfaceEmitVelocityFunc(m_particleSurface, m_flowContext.m_gridContext, dataFrontIdx, params, &m_surfaceEmitParams);
+	TRACE(NvFlowParticleSurfaceEmitVelocityFunc(m_particleSurface, m_flowContext.m_gridContext, dataFrontIdx, params, &m_surfaceEmitParams));
 }
 
 void SceneSimpleFlameParticleSurface::doEmitCustomEmitDensityFunc(NvFlowUint* dataFrontIdx, const NvFlowGridEmitCustomEmitParams* params)
 {
-	NvFlowParticleSurfaceEmitDensityFunc(m_particleSurface, m_flowContext.m_gridContext, dataFrontIdx, params, &m_surfaceEmitParams);
+	TRACE(NvFlowParticleSurfaceEmitDensityFunc(m_particleSurface, m_flowContext.m_gridContext, dataFrontIdx, params, &m_surfaceEmitParams));
 }
 
 void SceneSimpleFlameParticleSurface::doUpdate(float dt)
@@ -534,9 +535,9 @@ void SceneSimpleFlameParticleSurface::doUpdate(float dt)
 			particleData.positionStride = 4 * sizeof(float);
 			particleData.numParticles = NvFlowUint(m_positions.size() / 4u);
 
-			NvFlowParticleSurfaceUpdateParticles(m_particleSurface, m_flowContext.m_gridContext, &particleData);
+			TRACE(NvFlowParticleSurfaceUpdateParticles(m_particleSurface, m_flowContext.m_gridContext, &particleData));
 
-			NvFlowParticleSurfaceUpdateSurface(m_particleSurface, m_flowContext.m_gridContext, &m_particleParams);
+			TRACE(NvFlowParticleSurfaceUpdateSurface(m_particleSurface, m_flowContext.m_gridContext, &m_particleParams));
 		}
 
 		AppGraphCtxProfileEnd(m_appctx, "ParticleSurface");
@@ -597,9 +598,9 @@ void SceneSimpleFlameParticleSurface::draw(DirectX::CXMMATRIX projection, Direct
 		m_renderParams.depthStencilView = m_flowContext.m_dsv;
 		m_renderParams.renderTargetView = m_flowContext.m_rtv;
 
-		auto gridExport = NvFlowParticleSurfaceDebugGridExport(m_particleSurface, m_flowContext.m_renderContext);
+		auto gridExport = TRACE(NvFlowParticleSurfaceDebugGridExport(m_particleSurface, m_flowContext.m_renderContext));
 
-		NvFlowVolumeRenderGridExport(m_flowGridActor.m_volumeRender, m_flowContext.m_renderContext, gridExport, &m_renderParams);
+		TRACE(NvFlowVolumeRenderGridExport(m_flowGridActor.m_volumeRender, m_flowContext.m_renderContext, gridExport, &m_renderParams));
 
 		AppGraphCtxProfileEnd(m_appctx, "Render");
 	}
@@ -611,7 +612,7 @@ void SceneSimpleFlameParticleSurface::release()
 {
 	SceneSimpleFlame::release();
 
-	NvFlowReleaseParticleSurface(m_particleSurface);
+	TRACE(NvFlowReleaseParticleSurface(m_particleSurface));
 }
 
 void SceneSimpleFlameParticleSurface::imgui(int x, int y, int w, int h)
@@ -753,12 +754,12 @@ void SceneSimpleFlameMesh::init(AppGraphCtx* context, int winw, int winh)
 	NvFlowSDFGenDesc sdfDesc;
 	sdfDesc.resolution = { 128u, 128u, 128u };
 
-	m_sdfGen = NvFlowCreateSDFGen(m_flowContext.m_gridContext, &sdfDesc);
+	m_sdfGen = TRACE(NvFlowCreateSDFGen(m_flowContext.m_gridContext, &sdfDesc));
 
 	MeshData meshData;
 	MeshGetData(m_mesh, &meshData);
 
-	NvFlowSDFGenReset(m_sdfGen, m_flowContext.m_gridContext);
+	TRACE(NvFlowSDFGenReset(m_sdfGen, m_flowContext.m_gridContext));
 
 	XMMATRIX modelMatrix = XMMatrixMultiply(
 		XMMatrixScaling(m_sdfScale.x, m_sdfScale.y, m_sdfScale.z),
@@ -777,14 +778,14 @@ void SceneSimpleFlameMesh::init(AppGraphCtx* context, int winw, int winh)
 	meshParams.renderTargetView = m_flowContext.m_multiGPUActive ? nullptr : m_flowContext.m_rtv;
 	meshParams.depthStencilView = m_flowContext.m_multiGPUActive ? nullptr : m_flowContext.m_dsv;
 
-	NvFlowSDFGenVoxelize(m_sdfGen, m_flowContext.m_gridContext, &meshParams);
+	TRACE(NvFlowSDFGenVoxelize(m_sdfGen, m_flowContext.m_gridContext, &meshParams));
 
-	NvFlowSDFGenUpdate(m_sdfGen, m_flowContext.m_gridContext);
+	TRACE(NvFlowSDFGenUpdate(m_sdfGen, m_flowContext.m_gridContext));
 
 	// create shape from SDF
 	m_teapotShape = NvFlowCreateShapeSDFFromTexture3D(
 		m_flowContext.m_gridContext, 
-		NvFlowSDFGenShape(m_sdfGen, m_flowContext.m_gridContext)
+		TRACE(NvFlowSDFGenShape(m_sdfGen, m_flowContext.m_gridContext))
 	);
 }
 
@@ -792,8 +793,8 @@ void SceneSimpleFlameMesh::release()
 {
 	MeshRelease(m_mesh);
 	MeshContextRelease(m_meshContext);
-	NvFlowReleaseShapeSDF(m_teapotShape);
-	NvFlowReleaseSDFGen(m_sdfGen);
+	TRACE(NvFlowReleaseShapeSDF(m_teapotShape));
+	TRACE(NvFlowReleaseSDFGen(m_sdfGen));
 	SceneSimpleFlame::release();
 }
 
@@ -825,10 +826,10 @@ void SceneSimpleFlameMesh::doUpdate(float dt)
 	emitParams.shapeType = eNvFlowShapeTypeSDF;
 	emitParams.deltaTime = dt;
 
-	NvFlowGridEmit(m_flowGridActor.m_grid, &shapeDesc, 1u, &emitParams, 1u);
+	TRACE(NvFlowGridEmit(m_flowGridActor.m_grid, &shapeDesc, 1u, &emitParams, 1u));
 
 	NvFlowShapeSDF* sdfs[] = { m_teapotShape };
-	NvFlowGridUpdateEmitSDFs(m_flowGridActor.m_grid, sdfs, 1u);
+	TRACE(NvFlowGridUpdateEmitSDFs(m_flowGridActor.m_grid, sdfs, 1u));
 
 	// animate emitter
 	if (m_animate)
@@ -931,7 +932,7 @@ void SceneSimpleFlameCulling::doUpdate(float dt)
 				m_emitParams.shapeType = eNvFlowShapeTypeBox;
 				m_emitParams.deltaTime = dt;
 
-				NvFlowGridEmit(m_flowGridActor.m_grid, &shapeDesc, 1u, &m_emitParams, 1u);
+				TRACE(NvFlowGridEmit(m_flowGridActor.m_grid, &shapeDesc, 1u, &m_emitParams, 1u));
 			}
 
 			// grid of emitters
@@ -982,7 +983,7 @@ void SceneSimpleFlameCulling::doUpdate(float dt)
 						emitParams.shapeType = eNvFlowShapeTypeSphere;
 						emitParams.deltaTime = dt;
 
-						NvFlowGridEmit(m_flowGridActor.m_grid, &shapeDesc, 1u, &emitParams, 1u);
+						TRACE(NvFlowGridEmit(m_flowGridActor.m_grid, &shapeDesc, 1u, &emitParams, 1u));
 					}
 				}
 			}
@@ -1064,7 +1065,7 @@ void SceneSimpleFlameConvex::doUpdate(float dt)
 			m_emitParams.shapeRangeSize = 8u;
 			m_emitParams.deltaTime = dt;
 
-			NvFlowGridEmit(m_flowGridActor.m_grid, shapeDesc, 8u, &m_emitParams, 1u);
+			TRACE(NvFlowGridEmit(m_flowGridActor.m_grid, shapeDesc, 8u, &m_emitParams, 1u));
 
 			m_projectile.update(m_flowContext.m_gridContext, m_flowGridActor.m_grid, dt);
 
@@ -1168,7 +1169,7 @@ void SceneSimpleFlameCapsule::doUpdate(float dt)
 				m_emitParams.velocityLinear.y = 8.f;
 			}
 
-			NvFlowGridEmit(m_flowGridActor.m_grid, shapeDesc, 1u, &m_emitParams, 1u);
+			TRACE(NvFlowGridEmit(m_flowGridActor.m_grid, shapeDesc, 1u, &m_emitParams, 1u));
 
 			m_projectile.update(m_flowContext.m_gridContext, m_flowGridActor.m_grid, dt);
 

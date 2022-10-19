@@ -46,6 +46,7 @@
 #include "camera.h"
 
 #include <thread>
+#include "traceUtils.h"
 
 const int gWinWdefault = 2560 / 2;
 const int gWinHdefault = 1600 / 2;
@@ -150,6 +151,7 @@ void appInit()
 
 	// create app graph context
 	gAppGraphCtx = AppGraphCtxCreate(0);
+	g_pAppGraphContext = gAppGraphCtx;
 
 	appGraphCtxUpdateSize();
 

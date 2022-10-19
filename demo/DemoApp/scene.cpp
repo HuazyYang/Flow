@@ -37,6 +37,8 @@
 
 #include <SDL.h>
 
+#include "traceUtils.h"
+
 /// Scene registry here
 
 namespace Scenes
@@ -171,7 +173,7 @@ void SceneFluid::imguiDesc()
 			if (enableVTR == false)
 			{
 				NvFlowSupport support;
-				if (NvFlowGridQuerySupport(m_flowGridActor.m_grid, m_flowContext.m_gridContext, &support) == eNvFlowSuccess)
+				if (TRACE(NvFlowGridQuerySupport(m_flowGridActor.m_grid, m_flowContext.m_gridContext, &support) == eNvFlowSuccess))
 				{
 					m_flowGridActor.m_gridDesc.enableVTR = support.supportsVTR;
 				}
@@ -395,15 +397,15 @@ void SceneFluid::imguiFluidRender()
 		imguiIndent();
 		if (imguiserCheck("Blocks", (m_flowGridActor.m_gridParams.debugVisFlags & eNvFlowGridDebugVisBlocks) != 0, true))
 		{
-			m_flowGridActor.m_gridParams.debugVisFlags = NvFlowGridDebugVisFlags(m_flowGridActor.m_gridParams.debugVisFlags ^ eNvFlowGridDebugVisBlocks);
+			m_flowGridActor.m_gridParams.debugVisFlags = TRACE(NvFlowGridDebugVisFlags(m_flowGridActor.m_gridParams.debugVisFlags ^ eNvFlowGridDebugVisBlocks));
 		}
 		if (imguiserCheck("Emit Bounds", (m_flowGridActor.m_gridParams.debugVisFlags & eNvFlowGridDebugVisEmitBounds) != 0, true))
 		{
-			m_flowGridActor.m_gridParams.debugVisFlags = NvFlowGridDebugVisFlags(m_flowGridActor.m_gridParams.debugVisFlags ^ eNvFlowGridDebugVisEmitBounds);
+			m_flowGridActor.m_gridParams.debugVisFlags = TRACE(NvFlowGridDebugVisFlags(m_flowGridActor.m_gridParams.debugVisFlags ^ eNvFlowGridDebugVisEmitBounds));
 		}
 		if (imguiserCheck("Shapes Simple", (m_flowGridActor.m_gridParams.debugVisFlags & eNvFlowGridDebugVisShapesSimple) != 0, true))
 		{
-			m_flowGridActor.m_gridParams.debugVisFlags = NvFlowGridDebugVisFlags(m_flowGridActor.m_gridParams.debugVisFlags ^ eNvFlowGridDebugVisShapesSimple);
+			m_flowGridActor.m_gridParams.debugVisFlags = TRACE(NvFlowGridDebugVisFlags(m_flowGridActor.m_gridParams.debugVisFlags ^ eNvFlowGridDebugVisShapesSimple));
 		}
 		imguiUnindent();
 	}
@@ -733,7 +735,7 @@ NvFlowUint64 SceneFluid::getGridGPUMemUsage()
 
 	if (m_flowGridActor.m_grid)
 	{
-		NvFlowGridGPUMemUsage(m_flowGridActor.m_grid, &totalBytes);
+		TRACE(NvFlowGridGPUMemUsage(m_flowGridActor.m_grid, &totalBytes));
 	}
 
 	return totalBytes;
@@ -850,11 +852,11 @@ void Projectile::init(AppGraphCtx* appctx, NvFlowContext* context)
 	NvFlowShapeSDFDesc shapeDesc;
 	NvFlowShapeSDFDescDefaults(&shapeDesc);
 	shapeDesc.resolution = { 32u, 32u, 32u };
-	m_shape = NvFlowCreateShapeSDF(context, &shapeDesc);
+	m_shape = TRACE(NvFlowCreateShapeSDF(context, &shapeDesc));
 
 	// generate sphere SDF
 	const float radius = 0.8f;
-	auto mappedData = NvFlowShapeSDFMap(m_shape, context);
+	auto mappedData = TRACE(NvFlowShapeSDFMap(m_shape, context));
 	if (mappedData.data)
 	{
 		for (NvFlowUint k = 0; k < mappedData.dim.z; k++)
@@ -872,7 +874,7 @@ void Projectile::init(AppGraphCtx* appctx, NvFlowContext* context)
 
 					val = v;
 				}
-		NvFlowShapeSDFUnmap(m_shape, context);
+		TRACE(NvFlowShapeSDFUnmap(m_shape, context));
 	}
 }
 
@@ -932,7 +934,7 @@ void Projectile::update(NvFlowContext* context, NvFlowGrid* grid, float dt)
 				m_emitParams.shapeType = eNvFlowShapeTypeSphere;
 				m_emitParams.deltaTime = stepdt;
 
-				NvFlowGridEmit(grid, &shapeDesc, 1u, &m_emitParams, 1u);
+				TRACE(NvFlowGridEmit(grid, &shapeDesc, 1u, &m_emitParams, 1u));
 			}
 		}
 	}
@@ -1110,7 +1112,7 @@ void Projectile::release()
 		path.m_active = false;
 	}
 
-	NvFlowReleaseShapeSDF(m_shape);
+	TRACE(NvFlowReleaseShapeSDF(m_shape));
 
 	MeshRelease(m_mesh);
 	MeshContextRelease(m_meshContext);

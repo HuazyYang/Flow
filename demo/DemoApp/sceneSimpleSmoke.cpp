@@ -44,6 +44,7 @@ namespace PresetFireBall
 #include "scene.h"
 
 #include <SDL.h>
+#include "traceUtils.h"
 
 void SceneSimpleSmoke::initParams()
 {
@@ -213,7 +214,7 @@ void SceneSimpleSmoke::doUpdate(float dt)
 		m_emitParams.shapeType = eNvFlowShapeTypeSphere;
 		m_emitParams.deltaTime = dt;
 
-		NvFlowGridEmit(m_flowGridActor.m_grid, &shapeDesc, 1u, &m_emitParams, 1u);
+		TRACE(NvFlowGridEmit(m_flowGridActor.m_grid, &shapeDesc, 1u, &m_emitParams, 1u));
 
 		m_projectile.update(m_flowContext.m_gridContext, m_flowGridActor.m_grid, dt);
 

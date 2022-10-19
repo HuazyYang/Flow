@@ -30,15 +30,17 @@
 #include "imgui.h"
 #include "imguiser.h"
 
+#include "traceUtils.h"
+
 // ******************** FlowContext ************************
 
 void FlowContext::init(AppGraphCtx* appctx)
 {
 	m_appctx = appctx;
 
-	m_renderContext = NvFlowInteropCreateContext(appctx);
-	m_dsv = NvFlowInteropCreateDepthStencilView(appctx, m_renderContext);
-	m_rtv = NvFlowInteropCreateRenderTargetView(appctx, m_renderContext);
+	m_renderContext = TRACE(NvFlowInteropCreateContext(appctx));
+	m_dsv = TRACE(NvFlowInteropCreateDepthStencilView(appctx, m_renderContext));
+	m_rtv = TRACE(NvFlowInteropCreateRenderTargetView(appctx, m_renderContext));
 
 	// establishes m_gridContext
 	createComputeContext();
@@ -46,7 +48,7 @@ void FlowContext::init(AppGraphCtx* appctx)
 
 void FlowContext::createComputeContext()
 {
-	m_multiGPUSupported = NvFlowDedicatedDeviceAvailable(m_renderContext);
+	m_multiGPUSupported = TRACE(NvFlowDedicatedDeviceAvailable(m_renderContext));
 	m_multiGPUActive = m_multiGPUSupported && m_enableMultiGPU;
 	if (m_multiGPUActive)
 	{
@@ -54,28 +56,28 @@ void FlowContext::createComputeContext()
 		NvFlowDeviceDescDefaults(&deviceDesc);
 
 		deviceDesc.mode = eNvFlowDeviceModeProxy;
-		m_renderDevice = NvFlowCreateDevice(m_renderContext, &deviceDesc);
+		m_renderDevice = TRACE(NvFlowCreateDevice(m_renderContext, &deviceDesc));
 		deviceDesc.mode = eNvFlowDeviceModeUnique;
-		m_gridDevice = NvFlowCreateDevice(m_renderContext, &deviceDesc);
+		m_gridDevice = TRACE(NvFlowCreateDevice(m_renderContext, &deviceDesc));
 
 		NvFlowDeviceQueueDesc deviceQueueDesc = {};
 		deviceQueueDesc.queueType = eNvFlowDeviceQueueTypeGraphics;
 		deviceQueueDesc.lowLatency = false;
-		m_gridQueue = NvFlowCreateDeviceQueue(m_gridDevice, &deviceQueueDesc);
+		m_gridQueue = TRACE(NvFlowCreateDeviceQueue(m_gridDevice, &deviceQueueDesc));
 		deviceQueueDesc.queueType = eNvFlowDeviceQueueTypeCopy;
-		m_gridCopyQueue = NvFlowCreateDeviceQueue(m_gridDevice, &deviceQueueDesc);
-		m_renderCopyQueue = NvFlowCreateDeviceQueue(m_renderDevice, &deviceQueueDesc);
+		m_gridCopyQueue = TRACE(NvFlowCreateDeviceQueue(m_gridDevice, &deviceQueueDesc));
+		m_renderCopyQueue = TRACE(NvFlowCreateDeviceQueue(m_renderDevice, &deviceQueueDesc));
 
-		m_gridContext = NvFlowDeviceQueueCreateContext(m_gridQueue);
-		m_gridCopyContext = NvFlowDeviceQueueCreateContext(m_gridCopyQueue);
-		m_renderCopyContext = NvFlowDeviceQueueCreateContext(m_renderCopyQueue);
+		m_gridContext = TRACE(NvFlowDeviceQueueCreateContext(m_gridQueue));
+		m_gridCopyContext = TRACE(NvFlowDeviceQueueCreateContext(m_gridCopyQueue));
+		m_renderCopyContext = TRACE(NvFlowDeviceQueueCreateContext(m_renderCopyQueue));
 
 		NvFlowDeviceQueueStatus status = {};
-		NvFlowDeviceQueueUpdateContext(m_gridQueue, m_gridContext, &status);
+		TRACE(NvFlowDeviceQueueUpdateContext(m_gridQueue, m_gridContext, &status));
 	}
 	else
 	{
-		m_commandQueueSupported = NvFlowDedicatedDeviceQueueAvailable(m_renderContext);
+		m_commandQueueSupported = TRACE(NvFlowDedicatedDeviceQueueAvailable(m_renderContext));
 		m_commandQueueActive = m_commandQueueSupported && m_enableCommandQueue;
 		if (m_commandQueueActive)
 		{
@@ -83,23 +85,23 @@ void FlowContext::createComputeContext()
 			NvFlowDeviceDescDefaults(&deviceDesc);
 
 			deviceDesc.mode = eNvFlowDeviceModeProxy;
-			m_renderDevice = NvFlowCreateDevice(m_renderContext, &deviceDesc);
+			m_renderDevice = TRACE(NvFlowCreateDevice(m_renderContext, &deviceDesc));
 			m_gridDevice = m_renderDevice;
 
 			NvFlowDeviceQueueDesc deviceQueueDesc = {};
 			deviceQueueDesc.queueType = eNvFlowDeviceQueueTypeCompute;
 			deviceQueueDesc.lowLatency = true;
-			m_gridQueue = NvFlowCreateDeviceQueue(m_gridDevice, &deviceQueueDesc);
+			m_gridQueue = TRACE(NvFlowCreateDeviceQueue(m_gridDevice, &deviceQueueDesc));
 			deviceQueueDesc.queueType = eNvFlowDeviceQueueTypeCopy;
-			m_gridCopyQueue = NvFlowCreateDeviceQueue(m_gridDevice, &deviceQueueDesc);
+			m_gridCopyQueue = TRACE(NvFlowCreateDeviceQueue(m_gridDevice, &deviceQueueDesc));
 			m_renderCopyQueue = m_gridCopyQueue;
 
-			m_gridContext = NvFlowDeviceQueueCreateContext(m_gridQueue);
-			m_gridCopyContext = NvFlowDeviceQueueCreateContext(m_gridCopyQueue);
+			m_gridContext = TRACE(NvFlowDeviceQueueCreateContext(m_gridQueue));
+			m_gridCopyContext = TRACE(NvFlowDeviceQueueCreateContext(m_gridCopyQueue));
 			m_renderCopyContext = m_gridCopyContext;
 
 			NvFlowDeviceQueueStatus status = {};
-			NvFlowDeviceQueueUpdateContext(m_gridQueue, m_gridContext, &status);
+			TRACE(NvFlowDeviceQueueUpdateContext(m_gridQueue, m_gridContext, &status));
 		}
 		else
 		{
@@ -112,9 +114,9 @@ void FlowContext::createComputeContext()
 
 void FlowContext::release()
 {
-	NvFlowReleaseRenderTargetView(m_rtv);
-	NvFlowReleaseDepthStencilView(m_dsv);
-	NvFlowReleaseContext(m_renderContext);
+	TRACE(NvFlowReleaseRenderTargetView(m_rtv));
+	TRACE(NvFlowReleaseDepthStencilView(m_dsv));
+	TRACE(NvFlowReleaseContext(m_renderContext));
 
 	releaseComputeContext();
 }
@@ -123,40 +125,40 @@ void FlowContext::releaseComputeContext()
 {
 	if (m_gridDevice != m_renderDevice)
 	{
-		NvFlowReleaseContext(m_gridContext);
-		NvFlowReleaseContext(m_gridCopyContext);
-		NvFlowReleaseContext(m_renderCopyContext);
+		TRACE(NvFlowReleaseContext(m_gridContext));
+		TRACE(NvFlowReleaseContext(m_gridCopyContext));
+		TRACE(NvFlowReleaseContext(m_renderCopyContext));
 		m_gridContext = nullptr;
 		m_gridCopyContext = nullptr;
 		m_renderCopyContext = nullptr;
 
-		NvFlowReleaseDeviceQueue(m_gridQueue);
-		NvFlowReleaseDeviceQueue(m_gridCopyQueue);
-		NvFlowReleaseDeviceQueue(m_renderCopyQueue);
+		TRACE(NvFlowReleaseDeviceQueue(m_gridQueue));
+		TRACE(NvFlowReleaseDeviceQueue(m_gridCopyQueue));
+		TRACE(NvFlowReleaseDeviceQueue(m_renderCopyQueue));
 		m_gridQueue = nullptr;
 		m_gridCopyQueue = nullptr;
 		m_renderCopyQueue = nullptr;
 
-		NvFlowReleaseDevice(m_gridDevice);
-		NvFlowReleaseDevice(m_renderDevice);
+		TRACE(NvFlowReleaseDevice(m_gridDevice));
+		TRACE(NvFlowReleaseDevice(m_renderDevice));
 		m_gridDevice = nullptr;
 		m_renderDevice = nullptr;
 	}
 	else if (m_gridContext != m_renderContext)
 	{
-		NvFlowReleaseContext(m_gridContext);
-		NvFlowReleaseContext(m_gridCopyContext);
+		TRACE(NvFlowReleaseContext(m_gridContext));
+		TRACE(NvFlowReleaseContext(m_gridCopyContext));
 		m_gridContext = nullptr;
 		m_gridCopyContext = nullptr;
 		m_renderCopyContext = nullptr;
 
-		NvFlowReleaseDeviceQueue(m_gridQueue);
-		NvFlowReleaseDeviceQueue(m_gridCopyQueue);
+		TRACE(NvFlowReleaseDeviceQueue(m_gridQueue));
+		TRACE(NvFlowReleaseDeviceQueue(m_gridCopyQueue));
 		m_gridQueue = nullptr;
 		m_gridCopyQueue = nullptr;
 		m_renderCopyQueue = nullptr;
 
-		NvFlowReleaseDevice(m_gridDevice);
+		TRACE(NvFlowReleaseDevice(m_gridDevice));
 		m_gridDevice = nullptr;
 		m_renderDevice = nullptr;
 	}
@@ -181,24 +183,24 @@ int FlowContext::computeContextBegin()
 	if (m_gridDevice != m_renderDevice)
 	{
 		NvFlowDeviceQueueStatus status = {};
-		NvFlowDeviceQueueUpdateContext(m_gridQueue, m_gridContext, &status);
+		TRACE(NvFlowDeviceQueueUpdateContext(m_gridQueue, m_gridContext, &status));
 		framesInFlight = status.framesInFlight;
 
-		NvFlowDeviceQueueUpdateContext(m_gridCopyQueue, m_gridCopyContext, &status);
-		NvFlowDeviceQueueUpdateContext(m_renderCopyQueue, m_renderCopyContext, &status);
+		TRACE(NvFlowDeviceQueueUpdateContext(m_gridCopyQueue, m_gridCopyContext, &status));
+		TRACE(NvFlowDeviceQueueUpdateContext(m_renderCopyQueue, m_renderCopyContext, &status));
 	}
 	else if (m_gridContext != m_renderContext)
 	{
 		NvFlowDeviceQueueStatus status = {};
-		NvFlowDeviceQueueUpdateContext(m_gridQueue, m_gridContext, &status);
+		TRACE(NvFlowDeviceQueueUpdateContext(m_gridQueue, m_gridContext, &status));
 		framesInFlight = status.framesInFlight;
 
-		NvFlowDeviceQueueUpdateContext(m_gridCopyQueue, m_gridCopyContext, &status);
+		TRACE(NvFlowDeviceQueueUpdateContext(m_gridCopyQueue, m_gridCopyContext, &status));
 	}
 	else
 	{
-		NvFlowInteropUpdateContext(m_renderContext, m_appctx);
-		NvFlowContextPush(m_gridContext);
+		TRACE(NvFlowInteropUpdateContext(m_renderContext, m_appctx));
+		TRACE(NvFlowContextPush(m_gridContext));
 	}
 	return framesInFlight;
 }
@@ -207,18 +209,18 @@ void FlowContext::computeContextEnd()
 {
 	if (m_gridDevice != m_renderDevice)
 	{
-		NvFlowDeviceQueueConditionalFlush(m_gridQueue, m_gridContext);
-		NvFlowDeviceQueueConditionalFlush(m_gridCopyQueue, m_gridCopyContext);
-		NvFlowDeviceQueueConditionalFlush(m_renderCopyQueue, m_renderCopyContext);
+		TRACE(NvFlowDeviceQueueConditionalFlush(m_gridQueue, m_gridContext));
+		TRACE(NvFlowDeviceQueueConditionalFlush(m_gridCopyQueue, m_gridCopyContext));
+		TRACE(NvFlowDeviceQueueConditionalFlush(m_renderCopyQueue, m_renderCopyContext));
 	}
 	else if (m_gridContext != m_renderContext)
 	{
-		NvFlowDeviceQueueConditionalFlush(m_gridQueue, m_gridContext);
-		NvFlowDeviceQueueConditionalFlush(m_gridCopyQueue, m_gridCopyContext);
+		TRACE(NvFlowDeviceQueueConditionalFlush(m_gridQueue, m_gridContext));
+		TRACE(NvFlowDeviceQueueConditionalFlush(m_gridCopyQueue, m_gridCopyContext));
 	}
 	else
 	{
-		NvFlowContextPop(m_gridContext);
+		TRACE(NvFlowContextPop(m_gridContext));
 	}
 }
 
@@ -229,9 +231,9 @@ bool FlowContext::updateBegin(float dt)
 
 	if (shouldFlush)
 	{
-		NvFlowContextFlushRequestPush(m_gridContext);
-		NvFlowContextFlushRequestPush(m_gridCopyContext);
-		NvFlowContextFlushRequestPush(m_renderCopyContext);
+		TRACE(NvFlowContextFlushRequestPush(m_gridContext));
+		TRACE(NvFlowContextFlushRequestPush(m_gridCopyContext));
+		TRACE(NvFlowContextFlushRequestPush(m_renderCopyContext));
 	}
 
 	m_statUpdateAttemptCount += 1.0;
@@ -254,51 +256,51 @@ void FlowContext::preDrawBegin()
 	{
 		// update fence status on grid queue, no need to flush
 		NvFlowDeviceQueueStatus status = {};
-		NvFlowDeviceQueueUpdateContext(m_gridQueue, m_gridContext, &status);
-		NvFlowDeviceQueueUpdateContext(m_gridCopyQueue, m_gridCopyContext, &status);
-		NvFlowDeviceQueueUpdateContext(m_renderCopyQueue, m_renderCopyContext, &status);
+		TRACE(NvFlowDeviceQueueUpdateContext(m_gridQueue, m_gridContext, &status));
+		TRACE(NvFlowDeviceQueueUpdateContext(m_gridCopyQueue, m_gridCopyContext, &status));
+		TRACE(NvFlowDeviceQueueUpdateContext(m_renderCopyQueue, m_renderCopyContext, &status));
 	}
 	else if (m_gridContext != m_renderContext)
 	{
 		// update fence status on grid queue, no need to flush
 		NvFlowDeviceQueueStatus status = {};
-		NvFlowDeviceQueueUpdateContext(m_gridQueue, m_gridContext, &status);
-		NvFlowDeviceQueueUpdateContext(m_gridCopyQueue, m_gridCopyContext, &status);
+		TRACE(NvFlowDeviceQueueUpdateContext(m_gridQueue, m_gridContext, &status));
+		TRACE(NvFlowDeviceQueueUpdateContext(m_gridCopyQueue, m_gridCopyContext, &status));
 	}
 
-	NvFlowInteropUpdateContext(m_renderContext, m_appctx);
-	NvFlowContextPush(m_renderContext);
+	TRACE(NvFlowInteropUpdateContext(m_renderContext, m_appctx));
+	TRACE(NvFlowContextPush(m_renderContext));
 }
 
 void FlowContext::preDrawEnd()
 {
-	NvFlowContextPop(m_renderContext);
+	TRACE(NvFlowContextPop(m_renderContext));
 
 	// This will make gridProxy flush work
 	if (m_gridDevice != m_renderDevice)
 	{
-		//NvFlowDeviceQueueFlush(m_gridQueue, m_gridContext);
-		NvFlowDeviceQueueConditionalFlush(m_gridCopyQueue, m_gridCopyContext);
-		NvFlowDeviceQueueConditionalFlush(m_renderCopyQueue, m_renderCopyContext);
+		//TRACE(NvFlowDeviceQueueFlush(m_gridQueue, m_gridContext));
+		TRACE(NvFlowDeviceQueueConditionalFlush(m_gridCopyQueue, m_gridCopyContext));
+		TRACE(NvFlowDeviceQueueConditionalFlush(m_renderCopyQueue, m_renderCopyContext));
 	}
 	else if (m_gridContext != m_renderContext)
 	{
-		//NvFlowDeviceQueueFlush(m_gridQueue, m_gridContext);
-		NvFlowDeviceQueueConditionalFlush(m_gridCopyQueue, m_gridCopyContext);
+		//TRACE(NvFlowDeviceQueueFlush(m_gridQueue, m_gridContext));
+		TRACE(NvFlowDeviceQueueConditionalFlush(m_gridCopyQueue, m_gridCopyContext));
 	}
 }
 
 void FlowContext::drawBegin()
 {
-	NvFlowInteropUpdateContext(m_renderContext, m_appctx);
-	NvFlowInteropUpdateDepthStencilView(m_dsv, m_appctx, m_renderContext);
-	NvFlowInteropUpdateRenderTargetView(m_rtv, m_appctx, m_renderContext);
-	NvFlowContextPush(m_renderContext);
+	TRACE(NvFlowInteropUpdateContext(m_renderContext, m_appctx));
+	TRACE(NvFlowInteropUpdateDepthStencilView(m_dsv, m_appctx, m_renderContext));
+	TRACE(NvFlowInteropUpdateRenderTargetView(m_rtv, m_appctx, m_renderContext));
+	TRACE(NvFlowContextPush(m_renderContext));
 }
 
 void FlowContext::drawEnd()
 {
-	NvFlowContextPop(m_renderContext);
+	TRACE(NvFlowContextPop(m_renderContext));
 }
 
 // ******************* FlowGridActor *************************
@@ -345,9 +347,9 @@ void FlowGridActor::init(FlowContext* flowContext, AppGraphCtx* appctx)
 	m_appctx = appctx;
 
 	// create compute resources
-	m_grid = NvFlowCreateGrid(flowContext->m_gridContext, &m_gridDesc);
+	m_grid = TRACE(NvFlowCreateGrid(flowContext->m_gridContext, &m_gridDesc));
 
-	auto proxyGridExport = NvFlowGridGetGridExport(flowContext->m_gridContext, m_grid);
+	auto proxyGridExport = TRACE(NvFlowGridGetGridExport(flowContext->m_gridContext, m_grid));
 
 	NvFlowGridProxyDesc proxyDesc = {};
 	proxyDesc.gridContext = flowContext->m_gridContext;
@@ -365,39 +367,39 @@ void FlowGridActor::init(FlowContext* flowContext, AppGraphCtx* appctx)
 		proxyDesc.proxyType = eNvFlowGridProxyTypeInterQueue;
 	}
 
-	m_gridProxy = NvFlowCreateGridProxy(&proxyDesc);
+	m_gridProxy = TRACE(NvFlowCreateGridProxy(&proxyDesc));
 
-	auto gridExport = NvFlowGridProxyGetGridExport(m_gridProxy, flowContext->m_renderContext);
+	auto gridExport = TRACE(NvFlowGridProxyGetGridExport(m_gridProxy, flowContext->m_renderContext));
 
 	// create render resources
 	NvFlowVolumeRenderDesc volumeRenderDesc;
 	volumeRenderDesc.gridExport = gridExport;
 
-	m_volumeRender = NvFlowCreateVolumeRender(flowContext->m_renderContext, &volumeRenderDesc);
+	m_volumeRender = TRACE(NvFlowCreateVolumeRender(flowContext->m_renderContext, &volumeRenderDesc));
 
 	NvFlowCrossSectionDesc crossSectionDesc = {};
 	crossSectionDesc.gridExport = gridExport;
 	
-	m_crossSection = NvFlowCreateCrossSection(flowContext->m_renderContext, &crossSectionDesc);
+	m_crossSection = TRACE(NvFlowCreateCrossSection(flowContext->m_renderContext, &crossSectionDesc));
 
 	NvFlowGridSummaryDesc gridSummaryDesc = {};
 	gridSummaryDesc.gridExport = gridExport;
 
-	m_gridSummary = NvFlowCreateGridSummary(flowContext->m_gridContext, &gridSummaryDesc);
-	m_gridSummaryStateCPU = NvFlowCreateGridSummaryStateCPU(m_gridSummary);
+	m_gridSummary = TRACE(NvFlowCreateGridSummary(flowContext->m_gridContext, &gridSummaryDesc));
+	m_gridSummaryStateCPU = TRACE(NvFlowCreateGridSummaryStateCPU(m_gridSummary));
 
 	NvFlowRenderMaterialPoolDesc materialPoolDesc = {};
 	materialPoolDesc.colorMapResolution = 64u;
-	m_colorMap.m_materialPool = NvFlowCreateRenderMaterialPool(flowContext->m_renderContext, &materialPoolDesc);
+	m_colorMap.m_materialPool = TRACE(NvFlowCreateRenderMaterialPool(flowContext->m_renderContext, &materialPoolDesc));
 
 	NvFlowRenderMaterialParams materialParams = {};
 	NvFlowRenderMaterialParamsDefaults(&materialParams);
-	m_colorMap.m_materialDefault = NvFlowGetDefaultRenderMaterial(m_colorMap.m_materialPool);
+	m_colorMap.m_materialDefault = TRACE(NvFlowGetDefaultRenderMaterial(m_colorMap.m_materialPool));
 
 	// set invalid by default for mat0 and mat1
 	materialParams.material = NvFlowGridMaterialHandle{ nullptr, 1u };
-	m_colorMap.m_material0 = NvFlowCreateRenderMaterial(flowContext->m_renderContext, m_colorMap.m_materialPool, &materialParams);
-	m_colorMap.m_material1 = NvFlowCreateRenderMaterial(flowContext->m_renderContext, m_colorMap.m_materialPool, &materialParams);
+	m_colorMap.m_material0 = TRACE(NvFlowCreateRenderMaterial(flowContext->m_renderContext, m_colorMap.m_materialPool, &materialParams));
+	m_colorMap.m_material1 = TRACE(NvFlowCreateRenderMaterial(flowContext->m_renderContext, m_colorMap.m_materialPool, &materialParams));
 
 	m_renderParams.materialPool = m_colorMap.m_materialPool;
 
@@ -412,30 +414,30 @@ void FlowGridActor::init(FlowContext* flowContext, AppGraphCtx* appctx)
 		volumeShadowDesc.minResidentScale = 0.25f * (1.f / 64.f);
 		volumeShadowDesc.maxResidentScale = m_shadowResidentScale * 4.f * 0.25f * (1.f / 64.f);
 
-		m_volumeShadow = NvFlowCreateVolumeShadow(flowContext->m_renderContext, &volumeShadowDesc);
+		m_volumeShadow = TRACE(NvFlowCreateVolumeShadow(flowContext->m_renderContext, &volumeShadowDesc));
 	}
 }
 
 void FlowGridActor::release()
 {
-	NvFlowReleaseGrid(m_grid);
-	NvFlowReleaseGridProxy(m_gridProxy);
-	NvFlowReleaseVolumeRender(m_volumeRender);
-	NvFlowReleaseCrossSection(m_crossSection);
-	NvFlowReleaseGridSummary(m_gridSummary);
-	NvFlowReleaseGridSummaryStateCPU(m_gridSummaryStateCPU);
-	NvFlowReleaseRenderMaterialPool(m_colorMap.m_materialPool);
-	if (m_volumeShadow) NvFlowReleaseVolumeShadow(m_volumeShadow);
+	TRACE(NvFlowReleaseGrid(m_grid));
+	TRACE(NvFlowReleaseGridProxy(m_gridProxy));
+	TRACE(NvFlowReleaseVolumeRender(m_volumeRender));
+	TRACE(NvFlowReleaseCrossSection(m_crossSection));
+	TRACE(NvFlowReleaseGridSummary(m_gridSummary));
+	TRACE(NvFlowReleaseGridSummaryStateCPU(m_gridSummaryStateCPU));
+	TRACE(NvFlowReleaseRenderMaterialPool(m_colorMap.m_materialPool));
+	if (m_volumeShadow) TRACE(NvFlowReleaseVolumeShadow(m_volumeShadow));
 	m_volumeShadow = nullptr;
 }
 
 void FlowGridActor::updatePreEmit(FlowContext* flowContext, float dt)
 {
-	NvFlowGridSetParams(m_grid, &m_gridParams);
-	NvFlowGridSetMaterialParams(m_grid, NvFlowGridGetDefaultMaterial(m_grid), &m_materialParams);
-	NvFlowRenderMaterialUpdate(m_colorMap.m_materialDefault, &m_renderMaterialDefaultParams);
-	NvFlowRenderMaterialUpdate(m_colorMap.m_material0, &m_renderMaterialMat0Params);
-	NvFlowRenderMaterialUpdate(m_colorMap.m_material1, &m_renderMaterialMat1Params);
+	TRACE(NvFlowGridSetParams(m_grid, &m_gridParams));
+	TRACE(NvFlowGridSetMaterialParams(m_grid, NvFlowGridGetDefaultMaterial(m_grid), &m_materialParams));
+	TRACE(NvFlowRenderMaterialUpdate(m_colorMap.m_materialDefault, &m_renderMaterialDefaultParams));
+	TRACE(NvFlowRenderMaterialUpdate(m_colorMap.m_material0, &m_renderMaterialMat0Params));
+	TRACE(NvFlowRenderMaterialUpdate(m_colorMap.m_material1, &m_renderMaterialMat1Params));
 
 	if (m_enableTranslationTest)
 	{
@@ -446,12 +448,12 @@ void FlowGridActor::updatePreEmit(FlowContext* flowContext, float dt)
 
 		bool parity = (m_translationTestTime - floorf(m_translationTestTime)) > 0.5f;
 		NvFlowFloat3 gridLocation = parity ? m_translationOffsetA : m_translationOffsetB;
-		NvFlowGridSetTargetLocation(m_grid, gridLocation);
+		TRACE(NvFlowGridSetTargetLocation(m_grid, gridLocation));
 	}
 	else if(m_enableTranslationTestOld)
 	{
 		NvFlowFloat3 gridLocation = NvFlowFloat3{ 0.f, 0.f, 0.f };
-		NvFlowGridSetTargetLocation(m_grid, gridLocation);
+		TRACE(NvFlowGridSetTargetLocation(m_grid, gridLocation));
 
 		m_enableTranslationTestOld = false;
 	}
@@ -472,17 +474,17 @@ void FlowGridActor::updatePostEmit(FlowContext* flowContext, float dt, bool shou
 		resetDesc.halfSize.y *= scale;
 		resetDesc.halfSize.z *= scale;
 
-		NvFlowGridReset(m_grid, &resetDesc);
+		TRACE(NvFlowGridReset(m_grid, &resetDesc));
 	}
 
 	if (shouldUpdate)
 	{
-		NvFlowGridUpdate(m_grid, flowContext->m_gridContext, dt);
+		TRACE(NvFlowGridUpdate(m_grid, flowContext->m_gridContext, dt));
 
 		// collect stats
 		if (m_grid)
 		{
-			auto gridExport = NvFlowGridGetGridExport(flowContext->m_gridContext, m_grid);
+			auto gridExport = TRACE(NvFlowGridGetGridExport(flowContext->m_gridContext, m_grid));
 
 			// grab for debug vis use
 			if (flowContext->m_gridContext == flowContext->m_renderContext)
@@ -506,10 +508,10 @@ void FlowGridActor::updatePostEmit(FlowContext* flowContext, float dt, bool shou
 					NvFlowUint& numCells = *numCellss[passID];
 					NvFlowUint& maxBlocks = *maxBlockss[passID];
 
-					auto handle = NvFlowGridExportGetHandle(gridExport, flowContext->m_gridContext, channels[passID]);
+					auto handle = TRACE(NvFlowGridExportGetHandle(gridExport, flowContext->m_gridContext, channels[passID]));
 
 					NvFlowGridExportLayeredView layeredView = {};
-					NvFlowGridExportGetLayeredView(handle, &layeredView);
+					TRACE(NvFlowGridExportGetLayeredView(handle, &layeredView));
 
 					m_statNumLayers = handle.numLayerViews;
 					numBlocks = 0u;
@@ -518,7 +520,7 @@ void FlowGridActor::updatePostEmit(FlowContext* flowContext, float dt, bool shou
 					for (NvFlowUint layerIdx = 0u; layerIdx < handle.numLayerViews; layerIdx++)
 					{
 						NvFlowGridExportLayerView layerView = {};
-						NvFlowGridExportGetLayerView(handle, layerIdx, &layerView);
+						TRACE(NvFlowGridExportGetLayerView(handle, layerIdx, &layerView));
 
 						numBlocks += layerView.mapping.numBlocks;
 					}
@@ -531,7 +533,7 @@ void FlowGridActor::updatePostEmit(FlowContext* flowContext, float dt, bool shou
 		if (m_enableVolumeShadow && m_volumeShadow)
 		{
 			NvFlowVolumeShadowStats stats = {};
-			NvFlowVolumeShadowGetStats(m_volumeShadow, &stats);
+			TRACE(NvFlowVolumeShadowGetStats(m_volumeShadow, &stats));
 			m_statVolumeShadowBlocks = stats.shadowBlocksActive;
 			m_statVolumeShadowCells = stats.shadowCellsActive;
 		}
@@ -541,7 +543,7 @@ void FlowGridActor::updatePostEmit(FlowContext* flowContext, float dt, bool shou
 			m_statVolumeShadowCells = 0u;
 		}
 
-		auto gridExport = NvFlowGridGetGridExport(flowContext->m_gridContext, m_grid);
+		auto gridExport = TRACE(NvFlowGridGetGridExport(flowContext->m_gridContext, m_grid));
 
 		if (m_enableGridSummary)
 		{
@@ -549,15 +551,15 @@ void FlowGridActor::updatePostEmit(FlowContext* flowContext, float dt, bool shou
 			updateParams.gridExport = gridExport;
 			updateParams.stateCPU = m_gridSummaryStateCPU;
 
-			NvFlowGridSummaryUpdate(m_gridSummary, flowContext->m_gridContext, &updateParams);
+			TRACE(NvFlowGridSummaryUpdate(m_gridSummary, flowContext->m_gridContext, &updateParams));
 
-			NvFlowUint numLayers = NvFlowGridSummaryGetNumLayers(m_gridSummaryStateCPU);
+			NvFlowUint numLayers = TRACE(NvFlowGridSummaryGetNumLayers(m_gridSummaryStateCPU));
 			for (NvFlowUint layerIdx = 0u; layerIdx < numLayers; layerIdx++)
 			{
 				NvFlowGridSummaryResult* results = nullptr;
 				NvFlowUint numResults = 0u;
 
-				NvFlowGridSummaryGetSummaries(m_gridSummaryStateCPU, &results, &numResults, layerIdx);
+				TRACE(NvFlowGridSummaryGetSummaries(m_gridSummaryStateCPU, &results, &numResults, layerIdx));
 
 				//printf("GridSummary layer(%d) numResults(%d)", layerIdx, numResults);
 			}
@@ -567,13 +569,13 @@ void FlowGridActor::updatePostEmit(FlowContext* flowContext, float dt, bool shou
 		flushParams.gridContext = flowContext->m_gridContext;
 		flushParams.gridCopyContext = flowContext->m_gridCopyContext;
 		flushParams.renderCopyContext = flowContext->m_renderCopyContext;
-		NvFlowGridProxyPush(m_gridProxy, gridExport, &flushParams);
+		TRACE(NvFlowGridProxyPush(m_gridProxy, gridExport, &flushParams));
 	}
 }
 
 void FlowGridActor::preDraw(FlowContext* flowContext)
 {
-	//auto gridView = NvFlowGridGetGridView(m_grid, m_renderContext);
+	//auto gridView = TRACE(NvFlowGridGetGridView(m_grid, m_renderContext));
 
 	AppGraphCtxProfileBegin(m_appctx, "UpdateGridView");
 
@@ -581,9 +583,9 @@ void FlowGridActor::preDraw(FlowContext* flowContext)
 	flushParams.gridContext = flowContext->m_gridContext;
 	flushParams.gridCopyContext = flowContext->m_gridCopyContext;
 	flushParams.renderCopyContext = flowContext->m_renderCopyContext;
-	NvFlowGridProxyFlush(m_gridProxy, &flushParams);
+	TRACE(NvFlowGridProxyFlush(m_gridProxy, &flushParams));
 
-	auto gridExport = NvFlowGridProxyGetGridExport(m_gridProxy, flowContext->m_renderContext);
+	auto gridExport = TRACE(NvFlowGridProxyGetGridExport(m_gridProxy, flowContext->m_renderContext));
 
 	AppGraphCtxProfileEnd(m_appctx, "UpdateGridView");
 
@@ -646,9 +648,9 @@ void FlowGridActor::preDraw(FlowContext* flowContext)
 		shadowParams.renderChannel = m_renderParams.renderChannel;
 		shadowParams.renderMode = eNvFlowVolumeRenderMode_colormap;
 
-		NvFlowVolumeShadowUpdate(m_volumeShadow, flowContext->m_renderContext, gridExport, &shadowParams);
+		TRACE(NvFlowVolumeShadowUpdate(m_volumeShadow, flowContext->m_renderContext, gridExport, &shadowParams));
 
-		gridExport = NvFlowVolumeShadowGetGridExport(m_volumeShadow, flowContext->m_renderContext);
+		gridExport = TRACE(NvFlowVolumeShadowGetGridExport(m_volumeShadow, flowContext->m_renderContext));
 
 		AppGraphCtxProfileEnd(m_appctx, "VolumeShadows");
 	}
@@ -664,7 +666,7 @@ void FlowGridActor::preDraw(FlowContext* flowContext)
 
 		m_renderParamsOverride.renderMode = eNvFlowVolumeRenderMode_raw;
 
-		gridExport = NvFlowVolumeRenderLightGridExport(m_volumeRender, flowContext->m_renderContext, gridExport, &lightingParams);
+		gridExport = TRACE(NvFlowVolumeRenderLightGridExport(m_volumeRender, flowContext->m_renderContext, gridExport, &lightingParams));
 
 		AppGraphCtxProfileEnd(m_appctx, "Lighting");
 	}
@@ -693,7 +695,7 @@ void FlowGridActor::draw(FlowContext* flowContext, DirectX::CXMMATRIX projection
 			renderParamsCopy.preColorCompositeOnly = true;
 			renderParamsCopy.colorCompositeOnly = false;
 
-			NvFlowVolumeRenderGridExport(m_volumeRender, flowContext->m_renderContext, m_gridExportOverride, &renderParamsCopy);
+			TRACE(NvFlowVolumeRenderGridExport(m_volumeRender, flowContext->m_renderContext, m_gridExportOverride, &renderParamsCopy));
 		}
 		// composite to target
 		{
@@ -702,12 +704,12 @@ void FlowGridActor::draw(FlowContext* flowContext, DirectX::CXMMATRIX projection
 			renderParamsCopy.preColorCompositeOnly = false;
 			renderParamsCopy.colorCompositeOnly = true;
 
-			NvFlowVolumeRenderGridExport(m_volumeRender, flowContext->m_renderContext, m_gridExportOverride, &renderParamsCopy);
+			TRACE(NvFlowVolumeRenderGridExport(m_volumeRender, flowContext->m_renderContext, m_gridExportOverride, &renderParamsCopy));
 		}
 	}
 	else
 	{
-		NvFlowVolumeRenderGridExport(m_volumeRender, flowContext->m_renderContext, m_gridExportOverride, &m_renderParamsOverride);
+		TRACE(NvFlowVolumeRenderGridExport(m_volumeRender, flowContext->m_renderContext, m_gridExportOverride, &m_renderParamsOverride));
 	}
 
 	AppGraphCtxProfileEnd(m_appctx, "Render");
@@ -741,7 +743,7 @@ void FlowGridActor::draw(FlowContext* flowContext, DirectX::CXMMATRIX projection
 
 		m_crossSectionParams.materialPool = m_renderParams.materialPool;
 
-		NvFlowCrossSectionRender(m_crossSection, flowContext->m_renderContext, &m_crossSectionParams);
+		TRACE(NvFlowCrossSectionRender(m_crossSection, flowContext->m_renderContext, &m_crossSectionParams));
 
 		AppGraphCtxProfileEnd(m_appctx, "CrossSection");
 	}
@@ -755,7 +757,7 @@ void FlowGridActor::draw(FlowContext* flowContext, DirectX::CXMMATRIX projection
 		memcpy(&params.projectionMatrix, &projection, sizeof(NvFlowFloat4x4));
 		memcpy(&params.viewMatrix, &view, sizeof(NvFlowFloat4x4));
 
-		NvFlowVolumeShadowDebugRender(m_volumeShadow, flowContext->m_renderContext, &params);
+		TRACE(NvFlowVolumeShadowDebugRender(m_volumeShadow, flowContext->m_renderContext, &params));
 	}
 
 	if (m_enableGridSummary && m_enableGridSummaryDebugVis)
@@ -769,7 +771,7 @@ void FlowGridActor::draw(FlowContext* flowContext, DirectX::CXMMATRIX projection
 		memcpy(&params.projectionMatrix, &projection, sizeof(NvFlowFloat4x4));
 		memcpy(&params.viewMatrix, &view, sizeof(NvFlowFloat4x4));
 
-		NvFlowGridSummaryDebugRender(m_gridSummary, flowContext->m_renderContext, &params);
+		TRACE(NvFlowGridSummaryDebugRender(m_gridSummary, flowContext->m_renderContext, &params));
 	}
 }
 
@@ -782,12 +784,12 @@ void FlowColorMap::updateColorMap(NvFlowContext* context)
 	for (NvFlowUint matIdx = 0u; matIdx < 3u; matIdx++)
 	{
 		auto& curve = *curves[matIdx];
-		auto mapped = NvFlowRenderMaterialColorMap(context, materials[matIdx]);
+		auto mapped = TRACE(NvFlowRenderMaterialColorMap(context, materials[matIdx]));
 		if (mapped.data)
 		{
 			pointsToImage(mapped.data, mapped.dim, &curve[0], (unsigned int)curve.size());
 
-			NvFlowRenderMaterialColorUnmap(context, materials[matIdx]);
+			TRACE(NvFlowRenderMaterialColorUnmap(context, materials[matIdx]));
 		}
 	}
 }

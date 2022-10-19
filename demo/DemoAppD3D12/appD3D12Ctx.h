@@ -161,4 +161,9 @@ APP_GRAPH_CTX_API bool AppGraphCtxProfileGetD3D12(AppGraphCtx* context, const ch
 
 APP_GRAPH_CTX_API size_t AppGraphCtxDedicatedVideoMemoryD3D12(AppGraphCtx* context);
 
+
+APP_GRAPH_CTX_API void AppGraphCtxBeginMarkerD3D12(AppGraphCtx* context, const char* name);
+
+APP_GRAPH_CTX_API void AppGraphCtxEndMarkerD3D12(AppGraphCtx* context, const char* name);
+
 #endif

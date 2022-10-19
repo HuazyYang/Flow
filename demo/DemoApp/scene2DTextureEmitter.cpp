@@ -41,6 +41,8 @@ namespace Preset0
 
 #include <SDL.h>
 
+#include "traceUtils.h"
+
 void Scene2DTextureEmitter::initParams()
 {
 	m_flowGridActor.initParams(AppGraphCtxDedicatedVideoMemory(m_appctx));
@@ -91,10 +93,10 @@ void Scene2DTextureEmitter::init(AppGraphCtx* appctx, int winw, int winh)
 	shapeDesc.resolution.x = m_bitmap.width;
 	shapeDesc.resolution.y = m_bitmap.height;
 	shapeDesc.resolution.z = 1u;
-	m_shape = NvFlowCreateShapeSDF(m_flowContext.m_gridContext, &shapeDesc);
+	m_shape = TRACE(NvFlowCreateShapeSDF(m_flowContext.m_gridContext, &shapeDesc));
 
 	// generate SDF from bitmap
-	auto mappedData = NvFlowShapeSDFMap(m_shape, m_flowContext.m_gridContext);
+	auto mappedData = TRACE(NvFlowShapeSDFMap(m_shape, m_flowContext.m_gridContext));
 	if (mappedData.data)
 	{
 		NvFlowUint bmRowPitch = ((m_bitmap.bitsPerPixel * m_bitmap.width + 31) / 32) * 4;
@@ -119,7 +121,7 @@ void Scene2DTextureEmitter::init(AppGraphCtx* appctx, int winw, int winh)
 
 					val = v;
 				}
-		NvFlowShapeSDFUnmap(m_shape, m_flowContext.m_gridContext);
+		TRACE(NvFlowShapeSDFUnmap(m_shape, m_flowContext.m_gridContext));
 	}
 
 	animChanged();
@@ -189,10 +191,10 @@ void Scene2DTextureEmitter::doUpdate(float dt)
 			m_emitParams.shapeType = eNvFlowShapeTypeSDF;
 			m_emitParams.deltaTime = dt;
 
-			NvFlowGridEmit(m_flowGridActor.m_grid, &shapeDesc, 1u, &m_emitParams, 1u);
+			TRACE(NvFlowGridEmit(m_flowGridActor.m_grid, &shapeDesc, 1u, &m_emitParams, 1u));
 
 			NvFlowShapeSDF* sdfs[] = { m_shape };
-			NvFlowGridUpdateEmitSDFs(m_flowGridActor.m_grid, sdfs, 1u);
+			TRACE(NvFlowGridUpdateEmitSDFs(m_flowGridActor.m_grid, sdfs, 1u));
 
 			m_projectile.update(m_flowContext.m_gridContext, m_flowGridActor.m_grid, dt);
 
@@ -232,7 +234,7 @@ void Scene2DTextureEmitter::release()
 
 	m_flowGridActor.release();
 
-	NvFlowReleaseShapeSDF(m_shape);
+	TRACE(NvFlowReleaseShapeSDF(m_shape));
 
 	m_flowContext.release();
 }

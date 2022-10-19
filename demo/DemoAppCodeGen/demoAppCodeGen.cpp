@@ -36,7 +36,7 @@ LoaderType gLoaderType = eLoaderTypeDynamicLink;
 
 void genLoaderAppGraphCtx()
 {
-	const unsigned int numFunctions = 12u;
+	const unsigned int numFunctions = 14u;
 
 	const char* functionDefinitions[numFunctions] = {
 		"AppGraphCtx* AppGraphCtxCreate(int deviceID);",
@@ -50,7 +50,9 @@ void genLoaderAppGraphCtx()
 		"void AppGraphCtxProfileBegin(AppGraphCtx* context, const char* label);",
 		"void AppGraphCtxProfileEnd(AppGraphCtx* context, const char* label);",
 		"bool AppGraphCtxProfileGet(AppGraphCtx* context, const char** plabel, float* cpuTime, float* gpuTime, int index);",
-		"size_t AppGraphCtxDedicatedVideoMemory(AppGraphCtx* context);"
+		"size_t AppGraphCtxDedicatedVideoMemory(AppGraphCtx* context);",
+		"void AppGraphCtxBeginMarker(AppGraphCtx* context, const char* label);",
+		"void AppGraphCtxEndMarker(AppGraphCtx* context);"
 	};
 
 	StrHeap strHeap = allocateStrHeap(functionDefinitions, numFunctions);

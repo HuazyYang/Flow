@@ -61,3 +61,8 @@ APP_GRAPH_CTX_API void AppGraphCtxProfileEnd(AppGraphCtx* context, const char* l
 APP_GRAPH_CTX_API bool AppGraphCtxProfileGet(AppGraphCtx* context, const char** plabel, float* cpuTime, float* gpuTime, int index);
 
 APP_GRAPH_CTX_API size_t AppGraphCtxDedicatedVideoMemory(AppGraphCtx* context);
+
+
+APP_GRAPH_CTX_API void AppGraphCtxBeginMarker(AppGraphCtx* context, const char* name);
+
+APP_GRAPH_CTX_API void AppGraphCtxEndMarker(AppGraphCtx* context);

@@ -40,6 +40,7 @@ namespace PresetFlame
 #include "scene.h"
 
 #include <SDL.h>
+#include "traceUtils.h"
 
 void SceneEmitSubStep::initParams()
 {
@@ -104,7 +105,7 @@ void SceneEmitSubStep::emitImpulse(float x, float impulse_dt)
 	m_emitParams.shapeType = eNvFlowShapeTypeSphere;
 	m_emitParams.deltaTime = impulse_dt;
 
-	NvFlowGridEmit(m_flowGridActor.m_grid, &shapeDesc, 1u, &m_emitParams, 1u);
+	TRACE(NvFlowGridEmit(m_flowGridActor.m_grid, &shapeDesc, 1u, &m_emitParams, 1u));
 }
 
 void SceneEmitSubStep::emitSubSteps(float t_old, float x_old, float t_new, float x_new, float frame_dt)

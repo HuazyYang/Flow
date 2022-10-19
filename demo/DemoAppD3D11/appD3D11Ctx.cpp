@@ -26,8 +26,9 @@
 // Copyright (c) 2014-2021 NVIDIA Corporation. All rights reserved.
 
 //direct3d headers
-#include <d3d11.h>
+#include <d3d11_1.h>
 #include <dxgi.h>
+#include <pix.h>
 
 // include the Direct3D Library file
 #pragma comment (lib, "d3d11.lib")
@@ -82,6 +83,7 @@ AppGraphCtxD3D11::~AppGraphCtxD3D11()
 
 	COMRelease(m_device);
 	COMRelease(m_deviceContext);
+	COMRelease(m_userDefinedAnnotation);
 	COMRelease(m_depthState);
 
 	appGraphReleaseProfiler(m_profiler);
@@ -158,6 +160,8 @@ AppGraphCtx* AppGraphCtxCreateD3D11(int deviceID)
 		delete context;
 		return nullptr;
 	}
+
+	context->m_deviceContext->QueryInterface(IID_PPV_ARGS(&context->m_userDefinedAnnotation));
 
 	// cleanup adapter and factory
 	COMRelease(pAdapter);
@@ -795,4 +799,14 @@ size_t AppGraphCtxDedicatedVideoMemoryD3D11(AppGraphCtx* contextIn)
 {
 	auto context = cast_to_AppGraphCtxD3D11(contextIn);
 	return context->m_dedicatedVideoMemory;
+}
+
+void AppGraphCtxBeginMarkerD3D11(AppGraphCtx* contextIn, const char* name) {
+	auto context = cast_to_AppGraphCtxD3D11(contextIn);
+	PIXBeginEvent(context->m_userDefinedAnnotation, 0, name);
+}
+
+void AppGraphCtxEndMarkerD3D11(AppGraphCtx* contextIn, const char* name) {
+	auto context = cast_to_AppGraphCtxD3D11(contextIn);
+	PIXEndEvent(context->m_userDefinedAnnotation);
 }

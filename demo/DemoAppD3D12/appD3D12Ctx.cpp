@@ -28,6 +28,7 @@
 //direct3d headers
 #include <d3d12.h>
 #include <dxgi1_4.h>
+#include <pix.h>
 
 // include the Direct3D Library file
 #pragma comment (lib, "d3d12.lib")
@@ -1128,4 +1129,14 @@ size_t AppGraphCtxDedicatedVideoMemoryD3D12(AppGraphCtx* contextIn)
 {
 	auto context = cast_to_AppGraphCtxD3D12(contextIn);
 	return context->m_dedicatedVideoMemory;
+}
+
+void AppGraphCtxBeginMarkerD3D12(AppGraphCtx* contextIn, const char* name) {
+	auto context = cast_to_AppGraphCtxD3D12(contextIn);
+	PIXBeginEvent(context->m_commandQueue, 0, name);
+}
+
+void AppGraphCtxEndMarkerD3D12(AppGraphCtx* contextIn, const char* name) {
+	auto context = cast_to_AppGraphCtxD3D12(contextIn);
+	PIXEndEvent(context->m_commandQueue);
 }

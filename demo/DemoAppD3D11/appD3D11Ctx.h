@@ -46,6 +46,7 @@ struct AppGraphCtxD3D11
 	D3D11_VIEWPORT				m_viewport = {};
 	ID3D11Device*				m_device = nullptr;
 	ID3D11DeviceContext*		m_deviceContext = nullptr;
+	ID3DUserDefinedAnnotation*	m_userDefinedAnnotation = nullptr;
 	IDXGISwapChain*				m_swapChain = nullptr;
 	ID3D11RenderTargetView*		m_rtv = nullptr;
 	ID3D11Texture2D*			m_depthStencil = nullptr;
@@ -92,3 +93,7 @@ APP_GRAPH_CTX_API void AppGraphCtxProfileEndD3D11(AppGraphCtx* context, const ch
 APP_GRAPH_CTX_API bool AppGraphCtxProfileGetD3D11(AppGraphCtx* context, const char** plabel, float* cpuTime, float* gpuTime, int index);
 
 APP_GRAPH_CTX_API size_t AppGraphCtxDedicatedVideoMemoryD3D11(AppGraphCtx* context);
+
+APP_GRAPH_CTX_API void AppGraphCtxBeginMarkerD3D11(AppGraphCtx *context, const char *name);
+
+APP_GRAPH_CTX_API void AppGraphCtxEndMarkerD3D11(AppGraphCtx *context, const char *name);

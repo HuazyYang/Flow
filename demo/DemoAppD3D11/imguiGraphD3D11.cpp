@@ -28,7 +28,7 @@
 #include "imguiGraphD3D11.h"
 
 //direct3d headers
-#include <d3d11.h>
+#include <d3d11_1.h>
 
 #include "imguiVS.hlsl.h"
 #include "imguiPS.hlsl.h"

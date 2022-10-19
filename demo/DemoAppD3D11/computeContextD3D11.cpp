@@ -25,7 +25,7 @@
 //
 // Copyright (c) 2014-2021 NVIDIA Corporation. All rights reserved.
 
-#include <d3d11.h>
+#include <d3d11_1.h>
 
 #include "computeContextD3D11.h"
 

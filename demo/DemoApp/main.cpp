@@ -48,6 +48,8 @@
 #include <thread>
 #include "traceUtils.h"
 
+static int gInitSceneIndex = 0;
+
 const int gWinWdefault = 2560 / 2;
 const int gWinHdefault = 1600 / 2;
 int gWinW = gWinWdefault;
@@ -155,7 +157,7 @@ void appInit()
 
 	appGraphCtxUpdateSize();
 
-	gScene = getScene(0);
+	gScene = getScene(gInitSceneIndex);
 
 	AppGraphCtxFrameStart(gAppGraphCtx, gClearVal);
 
@@ -494,6 +496,25 @@ int main(int argc, char** argv)
 		if (0 == strcmp(argv[i], "-d3d12"))
 		{
 			gUseD3D12 = true;
+		}
+		else if (0 == strcmp(argv[i], "-scene")) {
+			if (i + 1 < argc) {
+				int sceneIndex = strtol(argv[i + 1], NULL, 10);
+				if (sceneIndex >= 0 && sceneIndex < 19) {
+					gInitSceneIndex = sceneIndex;
+				}
+				else {
+					fprintf(stderr,
+						"Invalid scene index, scene index must be in "
+						"range [0, 19), but %d is given\n",
+						sceneIndex);
+					return -1;
+				}
+			}
+			else {
+				fprintf(stderr,
+					"Invalid scene argument, please use [-scene <num>]\n");
+			}
 		}
 	}
 

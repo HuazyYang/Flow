@@ -47,11 +47,13 @@ if(${CMAKE_CL_64})
   )
 
   copy_assets(
-    "lib/win64/NvFlowLib${NVFLOWDEMO_POSTFIX}.dll;external/SDL2/lib/x64/SDL2.dll"
-    ""
-    NVFLOWDEMO_EXTRA_RUNTIME_FILES
+    TARGET NvFlowDemoAppRuntime
+    DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+    SOURCES
+    "lib/win64/NvFlowLib${NVFLOWDEMO_POSTFIX}.dll"
+    "lib/win64/NvFlowLib${NVFLOWDEMO_POSTFIX}.pdb"
+    "external/SDL2/lib/x64/SDL2.dll"
   )
-  add_custom_target(NvFlowDemoCopyExtraRuntime ALL DEPENDS ${NVFLOWDEMO_EXTRA_RUNTIME_FILES})
 else()
   add_library(NvFlowLib SHARED IMPORTED)
   set_target_properties(NvFlowLib PROPERTIES
@@ -82,20 +84,24 @@ else()
     PROPERTIES
     IMPORTED_IMPLIB ${CMAKE_CURRENT_SOURCE_DIR}/external/SDL2/lib/x86/SDL2main.lib
   )
-
+  
   copy_assets(
-    "lib/win32/NvFlowLib${NVFLOWDEMO_POSTFIX}.dll;external/SDL2/lib/x86/SDL2.dll"
-    ""
-    NVFLOWDEMO_EXTRA_RUNTIME_FILES
+    TARGET NvFlowDemoAppRuntime
+    DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+    SOURCES
+    "lib/win64/NvFlowLib${NVFLOWDEMO_POSTFIX}.dll"
+    "lib/win64/NvFlowLib${NVFLOWDEMO_POSTFIX}.pdb"
+    "external/SDL2/lib/x86/SDL2.dll"
   )
-
-  add_custom_target(NvFlowDemoCopyExtraRuntime ALL DEPENDS ${NVFLOWDEMO_EXTRA_RUNTIME_FILES})
 endif()
 
 # data
 file(GLOB NVFLOWDEMO_DATA_FILES "data/*.*")
-copy_assets("${NVFLOWDEMO_DATA_FILES}" "../../data" NVFLOWDEMO_DATA_COPIED_FILES)
-add_custom_target(NvFlowDemoAppCopyData ALL DEPENDS ${NVFLOWDEMO_DATA_COPIED_FILES})
+copy_assets(
+  TARGET NvFlowDemoData
+  DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/../../data
+  SOURCES ${NVFLOWDEMO_DATA_FILES}
+)
 
 find_program(FXC_COMPILER fxc REQUIRED)
 message("--- found fxc compiler: ${FXC_COMPILER}")
@@ -138,7 +144,7 @@ add_shader_header(TARGET NvFlowDemoApp SHADER_TARGET cs_5_0 SOURCE "demo/Shaders
 add_shader_header(TARGET NvFlowDemoApp SHADER_TARGET cs_5_0 SOURCE "demo/Shaders/customEmitEmitCS.hlsl")
 add_shader_header(TARGET NvFlowDemoApp SHADER_TARGET cs_5_0 SOURCE "demo/Shaders/customLightingCS.hlsl")
 target_link_libraries(NvFlowDemoApp NvFlowLib SDL2 SDL2main)
-add_dependencies(NvFlowDemoApp NvFlowDemoCopyExtraRuntime NvFlowDemoAppCopyData)
+add_dependencies(NvFlowDemoApp NvFlowDemoAppRuntime NvFlowDemoData)
 target_include_directories(NvFlowDemoApp PRIVATE "$<BUILD_INTERFACE:${SHADER_OBJECT_HEADER_OUTPUT_DIR}>")
 target_compile_definitions(NvFlowDemoApp PRIVATE "DLL_SUFFIX=${NVFLOWDEMO_POSTFIX}" "_CRT_SECURE_NO_WARNINGS")
 

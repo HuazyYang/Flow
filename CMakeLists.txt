@@ -1,4 +1,7 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.21)
+
+cmake_policy(SET CMP0121 NEW)
+
 
 include(cmake/CopyAsset.cmake)
 
@@ -178,3 +181,5 @@ add_shader_header(TARGET DemoAppD3D12 SHADER_TARGET vs_5_0 SOURCE "demo/Shaders/
 add_shader_header(TARGET DemoAppD3D12 SHADER_TARGET ps_5_0 SOURCE "demo/Shaders/meshPS.hlsl")
 set_target_properties(DemoAppD3D12 PROPERTIES OUTPUT_NAME "DemoAppD3D12${NVFLOWDEMO_POSTFIX}" INCLUDE_DIRECTORIES "$<BUILD_INTERFACE:${SHADER_OBJECT_HEADER_OUTPUT_DIR}>")
 target_link_libraries(DemoAppD3D12 NvFlowLib SDL2)
+
+add_subdirectory(nvflow)

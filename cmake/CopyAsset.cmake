@@ -1,27 +1,29 @@
 # copy asset file from source directory to binary directory.
-function(copy_assets asset_files dir_name copied_files)
-foreach(asset ${asset_files})
-  #message("asset: ${asset}")
-  get_filename_component(file_name ${asset} NAME)
-  get_filename_component(full_path ${asset} ABSOLUTE)
-  set(output_dir ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${dir_name})
-  set(output_file ${output_dir}/${file_name})
-  set(${copied_files} ${${copied_files}} ${output_file})
-  set(${copied_files} ${${copied_files}} PARENT_SCOPE)
-  set_source_files_properties(${asset} PROPERTIES HEADER_FILE_ONLY TRUE)
-  if (WIN32)
+function(copy_assets)
+  set(oneValueArgs TARGET DESTINATION)
+  set(multiValueArgs SOURCES)
+  cmake_parse_arguments(asset "" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+
+  set(copied_files "")
+
+  foreach(asset ${asset_SOURCES})
+    get_filename_component(asset_fname ${asset} NAME)
+    get_filename_component(asset_fpath ${asset} ABSOLUTE)
+    set_source_files_properties(${asset} PROPERTIES HEADER_FILE_ONLY TRUE)
+
+    set(output_file ${asset_DESTINATION}/${asset_fname})
+
     add_custom_command(
       OUTPUT ${output_file}
-      #COMMAND mklink \"${output_file}\" \"${full_path}\"
-      COMMAND xcopy \"${full_path}\" \"${output_file}*\" /Y /Q /F
-      DEPENDS ${full_path}
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different "${asset_fpath}" "${output_file}"
+      DEPENDS "${asset_fpath}"
     )
-  else()
-    add_custom_command(
-      OUTPUT ${output_file}
-      COMMAND mkdir --parents ${output_dir} && cp --force --link \"${full_path}\" \"${output_file}\"
-      DEPENDS ${full_path}
-    )
-  endif()
-endforeach()
+    list(APPEND copied_files "${output_file}")
+  endforeach()
+
+  add_custom_target(
+    ${asset_TARGET}
+    ALL
+    DEPENDS ${copied_files}
+  )
 endfunction()

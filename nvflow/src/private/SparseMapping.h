@@ -54,7 +54,7 @@ struct SparseMapping : NvFlowObject {
 
     virtual SparseMappingLayerHandle *mapAccumLayer(SparseMappingLayerHandle *result,
                                                     SparseMappingHandle mapping,
-                                                    uint32_t idx);
+                                                    uint32_t idx) = 0;
 
     virtual void unmapAccumLayer(SparseMappingHandle mapping, uint32_t idx) = 0;
 
@@ -73,7 +73,7 @@ struct SparseMapping : NvFlowObject {
 
     virtual SparseMappingLayerHandle *mapMaskLayer(SparseMappingLayerHandle *result,
                                                    SparseMappingHandle mapping,
-                                                   uint32_t idx);
+                                                   uint32_t idx) = 0;
 
     virtual void unmapMaskLayer(SparseMappingHandle mapping, uint32_t idx) = 0;
 
@@ -94,7 +94,7 @@ struct SparseMappingInternal : SparseMapping {
     virtual SparseMappingHandle *mapMaskScaled(SparseMappingHandle *result,
                                                NvFlowContext *ctx, NvFlowDim dim) = 0;
 
-    virtual SparseMappingLayerHandle *mapMAskLayerScaled(SparseMappingLayerHandle *result,
+    virtual SparseMappingLayerHandle *mapMaskLayerScaled(SparseMappingLayerHandle *result,
                                                          NvFlowContext *ctx,
                                                          SparseMappingHandle mapping,
                                                          uint32_t idx) = 0;
@@ -130,13 +130,16 @@ struct SparseMappingImpl : Object, SparseMappingInternal {
     SparseMappingHandle *mapMask(SparseMappingHandle *result, NvFlowContext *ctx) override;
 
     SparseMappingLayerHandle *mapMaskLayer(SparseMappingLayerHandle *result,
-                                           SparseMappingHandle mapping, uint32_t idx) override;
+                                           SparseMappingHandle handle,
+                                           uint32_t idx) override;
 
-    void unmapMaskLayer(SparseMappingHandle mapping, uint32_t idx) override;
+    void unmapMaskLayer(SparseMappingHandle handle, uint32_t idx) override;
 
     void unmapMask(NvFlowContext *ctx) override;
 
     void addLayer() override;
+
+    void addLayer(NvFlowContext *ctx);
 
     void enableLayer(uint32_t idx) override;
 
@@ -149,7 +152,7 @@ struct SparseMappingImpl : Object, SparseMappingInternal {
     SparseMappingHandle *mapMaskScaled(SparseMappingHandle *result, NvFlowContext *ctx,
                                        NvFlowDim dim) override;
 
-    SparseMappingLayerHandle *mapMAskLayerScaled(SparseMappingLayerHandle *result,
+    SparseMappingLayerHandle *mapMaskLayerScaled(SparseMappingLayerHandle *result,
                                                  NvFlowContext *ctx,
                                                  SparseMappingHandle mapping,
                                                  uint32_t idx) override;
@@ -163,6 +166,12 @@ struct SparseMappingImpl : Object, SparseMappingInternal {
     SparseMappingImpl(NvFlowContext *ctx, const SparseMappingDesc *desc);
 
     ~SparseMappingImpl();
+
+    NvFlowTexture3D *createMask(NvFlowContext *ctx, const NvFlowDim &mask);
+
+    void clearMask(NvFlowContext *ctx, NvFlowTexture3D *maskTex);
+
+    void syncLayers(NvFlowContext *ctx);
 
     SparseMappingDesc m_desc;
     uint64_t m_mapAccumVersion = 0;

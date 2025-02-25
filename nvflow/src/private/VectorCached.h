@@ -228,6 +228,10 @@ class VectorCached2D {
         m_sizeY = sizeY;
     }
 
+    size_type sizeX() const { return m_sizeX; }
+
+    size_type sizeY() const { return m_sizeY; }
+
     void reserve(size_type requestedCapacityX, size_type requestedCapacityY) {
         size_type capacityX = m_capacityX, capacityY = m_capacityY;
         while (capacityX < requestedCapacityX)

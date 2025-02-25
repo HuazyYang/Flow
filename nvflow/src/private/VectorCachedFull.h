@@ -49,25 +49,45 @@ T* construct_fill_n(T* start, T* end, Allocator& al, const ValueInitTag& tag) {
 }
 
 template <typename Allocator, typename T, typename Iter>
-T* copy_construct_range(Iter start, Iter end, T* dest, const Allocator& al) {
+T* copy_construct_range(Iter start, Iter end, T* dest, Allocator& al) {
     for (; start != end; ++start) {
         al.construct(dest++, *start);
     }
     return dest;
 }
 
-template <typename Allocator, typename T, typename Iter>
-T* move_construct_range(Iter start, Iter end, T* dest, const Allocator& al) {
-    for (; start != end; ++start) {
-        al.construct(dest++, std::move(*start));
+template <typename Allocator, typename Iter>
+Iter move_construct_range(Iter start, Iter end, Iter dest, Allocator& al) {
+    while (start != end) {
+        al.construct(dest++, std::move(*start++));
     }
     return dest;
 }
 
 template <typename T>
-T* move_backward(T* start, T* end, T* dest) {
+T* move_assign_bwd(T* start, T* end, T* dest) {
     while (start != end)
         *--dest = std::move(*--end);
+    return dest;
+}
+
+template <typename T>
+T* move_assign_fwd(T* start, T* end, T* dest) {
+    while (start != end)
+        *dest++ = std::move(*start++);
+    return dest;
+}
+
+template <typename InIter, typename OutIter>
+OutIter copy_memmove(InIter first, InIter end, OutIter dest) {
+    if (first != end) {
+        auto sz = std::distance(first, end);
+        auto first_raw = std::addressof(*first);
+        auto dest_raw = std::addressof(*dest);
+        memmove(dest_raw, first_raw, sz);
+
+        dest += sz;
+    }
     return dest;
 }
 
@@ -207,13 +227,12 @@ class VectorCached {
     VectorCached(VectorCached&& right) noexcept : VectorCached{} { this->swap(right); }
 
     VectorCached& operator=(const VectorCached& right) {
-        const size_type new_size = right.size();
-        if (new_size && this != std::addressof(right)) {
-            _destroy_reallocate_exactly(new_size);
-            _last = _first + new_size;
-            copy_construct_range(right._first, right._last, _first, _alloc);
-        }
+        if (this != std::addressof(right)) _assign_range(right._first, right._last);
         return *this;
+    }
+
+    VectorCached& operator=(std::initializer_list<T> lst) {
+        _assign_range(lst.begin(), lst.end());
     }
 
     VectorCached& operator=(VectorCached&& right) noexcept {
@@ -222,18 +241,6 @@ class VectorCached {
     }
 
     ~VectorCached() { _tidy(); }
-
-    size_type max_size() const { return _alloc.max_size(); }
-
-    size_type capacity() const { return _end - _first; }
-
-    size_type size() const { return _last - _first; }
-
-    bool empty() const { return _first != _last; }
-
-    value_type* data() { return _first; }
-
-    const value_type* data() const { return _first; }
 
     void resize(size_type new_size) { _resize(new_size, ValueInitTag{}); }
 
@@ -244,13 +251,6 @@ class VectorCached {
             _reallocate_exactly(new_capacity);
         }
     }
-
-    void clear() {
-        destroy_range(_first, _last, _alloc);
-        _last = _first;
-    }
-
-    void swap(VectorCached& right) noexcept { _swap(right); }
 
     void shrink_to_fit() {
         if (_last != _end) {
@@ -296,7 +296,7 @@ class VectorCached {
 
                 _alloc.construct(old_last, std::move(old_last[-1]));
                 _last += 1;
-                move_backward(where, old_last - 1, old_last);
+                move_assign_bwd(where, old_last - 1, old_last);
                 _alloc.destroy(where);
                 _alloc.construct(where, std::move(obj.get_val()));
             }
@@ -355,7 +355,7 @@ class VectorCached {
                 std::fill(where, _last, temp);
             } else {
                 new_last = move_construct_range(_last - count, _last, _last, _alloc);
-                move_backward(where, _last - count, _last);
+                move_assign_bwd(where, _last - count, _last);
                 std::fill(where, where + count, temp);
             }
 
@@ -363,6 +363,93 @@ class VectorCached {
         }
 
         return where;
+    }
+
+    void pop_back() noexcept {
+        _alloc.destroy(_last - 1);
+        --_last;
+    }
+
+    iterator erase(iterator where) noexcept {
+        const pointer whereptr = where;
+
+        move_assign_fwd(whereptr + 1, _last, whereptr);
+        _alloc.destroy(_last - 1);
+        _last -= 1;
+        return where;
+    }
+
+    iterator erase(iterator first, iterator last) noexcept {
+        const pointer firstptr = first;
+        const pointer lastptr = last;
+
+        const pointer new_last = move_assign_fwd(lastptr, _last, firstptr);
+        details::destroy_range(new_last, _last, _alloc);
+        _last = new_last;
+
+        return first;
+    }
+
+    void clear() noexcept {
+        destroy_range(_first, _last, _alloc);
+        _last = _first;
+    }
+
+    void swap(VectorCached& right) noexcept { _swap(right); }
+
+    T* data() { return _first; }
+
+    const T* data() const { return _first; }
+
+    iterator begin() { return _first; }
+
+    iterator end() { return _last; }
+
+    const_iterator begin() const { return _first; }
+
+    const_pointer end() const { return _last; }
+
+    bool empty() const { return _first != _last; }
+
+    size_type size() const { return _last - _first; }
+
+    size_type max_size() const { return _alloc.max_size(); }
+
+    size_type capacity() const { return _end - _first; }
+
+    T& operator[](const size_type idx) noexcept { return _first[idx]; }
+
+    const T& operator[](const size_type idx) const noexcept { return _first[idx]; }
+
+    T& at(const size_type idx) {
+        if (idx >= size()) _xrange();
+
+        return _first[idx];
+    }
+
+    const T& at(const size_type idx) const {
+        if (idx >= size()) _xrange();
+        return _first[idx];
+    }
+
+    T& front() {
+        if (_first >= _last) _xrange();
+        return *_first;
+    }
+
+    T& back() {
+        if (_first >= _last) _xrange();
+        return _last[-1];
+    }
+
+    const T& front() const {
+        if (_first >= _last) _xrange();
+        return *_first;
+    }
+
+    const T& back() const {
+        if (_first >= _last) _xrange();
+        return _last[-1];
     }
 
  private:
@@ -385,7 +472,7 @@ class VectorCached {
         const size_type old_size = size();
 
         if (new_size < old_size) {
-            const pointer new_last = _first + new_last;
+            const pointer new_last = _first + new_size;
             destroy_range(new_last, _last, _alloc);
             _last = new_last;
             return;
@@ -400,7 +487,7 @@ class VectorCached {
             } else
                 _last = _first + new_size;
 
-            construct_fill_n(_first + old_size, _last, init_val);
+            construct_fill_n(_first + old_size, _last, _alloc, init_val);
         }
     }
 
@@ -421,18 +508,23 @@ class VectorCached {
         _end = _first + new_capacity;
     }
 
-    void _destroy_reallocate_exactly(const size_type new_capacity) {
-        if (new_capacity > max_size()) {
+    void _clear_and_reserve_geometric(const size_type new_size) {
+        if (new_size > max_size()) {
             _xlength();
         }
 
-        destroy_range(_first, _last, _alloc);
+        const size_type new_capacity = _calculate_growth(new_size);
 
-        if (new_capacity != capacity()) {
+        if (_first) {
+            details::destroy_range(_first, _last, _alloc);
             _alloc.deallocate(_first, capacity());
-            _first = _alloc.allocate(new_capacity);
-            _end = _first + new_capacity;
+
+            _first = _end = _last = nullptr;
         }
+
+        // Reserve memory
+        _first = _alloc.allocate(new_capacity);
+        _end = _first + new_capacity;
         _last = _first;
     }
 
@@ -476,7 +568,9 @@ class VectorCached {
         return _first + whereoff;
     }
 
-    void _xlength() { throw std::length_error("std::vector too long"); }
+    void _xlength() { throw std::length_error("VectorCached too long"); }
+
+    void _xrange() const { throw std::out_of_range("VectorCached subscript out of range"); }
 
     void _swap(VectorCached& right) noexcept {
         if (this != std::addressof(right)) {
@@ -524,6 +618,57 @@ class VectorCached {
         if (_first != _last) destroy_range(_first, _last, _alloc);
         if (_first != _end) _alloc.deallocate(_first, capacity());
         _first = _end = _last = nullptr;
+    }
+
+    template <typename RAIter,
+              std::enable_if_t<
+                  std::conjunction_v<
+                      std::is_trivially_assignable<
+                          value_type, typename std::iterator_traits<RAIter>::value_type>,
+                      std::is_trivially_constructible<
+                          value_type, typename std::reverse_iterator<RAIter>::value_type>,
+                      std::is_trivially_destructible<value_type>>,
+                  int> = 0>
+    void _assign_range(RAIter first, RAIter last) {
+        const auto new_size = static_cast<size_type>(std::distance(first, last));
+        const auto old_capacity = capacity();
+
+        if (new_size > old_capacity) {
+            _clear_and_reserve_geometric(new_size);
+
+            _last = copy_memmove(first, last, _first);
+        }
+    }
+
+    template <typename RAIter,
+              std::enable_if_t<
+                  !std::conjunction_v<
+                      std::is_trivially_assignable<
+                          value_type, typename std::iterator_traits<RAIter>::value_type>,
+                      std::is_trivially_constructible<
+                          value_type, typename std::reverse_iterator<RAIter>::value_type>,
+                      std::is_trivially_destructible<value_type>>,
+                  int> = 0>
+    void _assign_range(RAIter first, RAIter last) {
+        const auto new_size = static_cast<size_type>(std::distance(first, last));
+        const auto old_size = size();
+
+        if (new_size > old_size) {
+            const auto old_capacity = capacity();
+            if (new_size > old_capacity) {
+                _clear_and_reserve_geometric(new_size);
+                old_size = 0;
+            }
+
+            const RAIter mid = std::next(first, old_size);
+            std::copy(first, mid, _first);
+            _last = copy_construct_range(mid, last, _last, _alloc);
+        } else {
+            const pointer new_last = _first + new_size;
+            std::copy(first, last, _first);
+            destroy_range(new_last, _last, _alloc);
+            _last = new_last;
+        }
     }
 
     allocator_type _alloc;

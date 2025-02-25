@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <dxgi.h>
 #include <type_traits>
-#include "VectorCached.h"
+#include <cassert>
 
 namespace NvFlow {
 
@@ -35,11 +35,6 @@ T alignUp(T ptr) {
 
 NvFlowDim getTileDim(NvFlowFormat format);
 
-// Vector math
-inline NvFlowDim operator/(NvFlowDim v1, NvFlowDim v2) {
-    return NvFlowDim{v1.x / v2.x, v1.y / v2.y, v1.z / v2.z};
-}
-
 ///
 /// Error handling
 ///
@@ -64,8 +59,12 @@ enum CommonErrorType {
     NvFlow::HandleError(__FILE__, __LINE__, NVFLOW_FUNCSIG, \
                         NvFlow::COMMON_ERROR_INDEX_OUT_OF_RANGE)
 
+#define NVFLOW_ASSERT(expr) assert(expr)
+
 void HandleError(const char* file, uint32_t line, const char* pos, CommonErrorType errType);
 
 }  // namespace NvFlow
+
+#include "NvFlowMath.h"
 
 #endif /* TYPES_H */

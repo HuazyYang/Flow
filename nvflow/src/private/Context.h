@@ -1,13 +1,14 @@
 #ifndef CONTEXT_H
 #define CONTEXT_H
 #include "NvFlowContextImpl.h"
-#include <nvflow/NvFlowContextExt.h>
 #include "Object.h"
 #include <dxgi.h>
 
 namespace NvFlow {
 
 uint64_t FlowDeferredRelease(float timeoutMS);
+
+IDXGIFactory1 *getDXGIFactoryD3D(IDXGIAdapter1 *pAdapter1);
 
 struct ConstantBuffer : NvFlowConstantBuffer {
     NvFlowConstantBufferDesc m_desc;
@@ -283,7 +284,7 @@ struct Context : NvFlowContext {
 
     virtual void timerEnd(Timer *timer) = 0;
 
-    virtual int timerGetResult(Timer *timer, float *timeGPU, float *timeCPU) = 0;
+    virtual NvFlowResult timerGetResult(Timer *timer, float *timeGPU, float *timeCPU) = 0;
 
     virtual EventQueue *createEventQueue() = 0;
 

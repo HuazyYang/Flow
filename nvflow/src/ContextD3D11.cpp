@@ -1,5 +1,7 @@
 #include "ContextD3D11.h"
 #include "Types.h"
+#include <dxgi1_4.h>
+#include <d3d12.h>
 
 namespace NvFlow {
 
@@ -87,7 +89,24 @@ NvFlowDim ContextD3D11::extractDim(ID3D11View *srv) {
     return extractDim(resource.Get());
 }
 
-ContextD3D11::ContextD3D11(const NvFlowContextDescD3D11 *pdesc) {
+ContextD3D11::ContextD3D11(const NvFlowContextDescD3D11 *pdesc)
+    : m_device{0},
+      m_deviceContext{0},
+      m_d3dAnnotation{0},
+      m_sampler0{0},
+      m_sampler1{0},
+      m_sampler2{0},
+      m_sampler3{0},
+      m_sampler4{0},
+      m_sampler5{0},
+      m_VTRSupportChecked{0},
+      m_VTRSupported{0},
+      m_tileCoords{},
+      m_tileRegionSize{},
+      m_rangeFlags{},
+      m_tilePoolCoords{},
+      m_tilePoolRangeSize{},
+      m_state{} {
     updateContext(pdesc);
 
     auto createSampler = [this](D3D11_FILTER filter, D3D11_TEXTURE_ADDRESS_MODE mode =
@@ -102,7 +121,7 @@ ContextD3D11::ContextD3D11(const NvFlowContextDescD3D11 *pdesc) {
                                           {0.f, 0.f, 0.f, 0.f},
                                           0,
                                           D3D11_FLOAT32_MAX};
-        ComPtr<ID3D11SamplerState> sampler;
+        ID3D11SamplerState* sampler;
         m_device->CreateSamplerState(&samplerDesc, &sampler);
         return sampler;
     };
@@ -119,12 +138,24 @@ ContextD3D11::ContextD3D11(const NvFlowContextDescD3D11 *pdesc) {
     m_sampler5 = createSampler(D3D11_FILTER_MIN_MAG_MIP_POINT, D3D11_TEXTURE_ADDRESS_CLAMP);
 }
 
+ContextD3D11::~ContextD3D11() {
+    SafeRelease(m_device);
+    SafeRelease(m_deviceContext);
+    SafeRelease(m_d3dAnnotation);
+    SafeRelease(m_sampler0);
+    SafeRelease(m_sampler1);
+    SafeRelease(m_sampler2);
+    SafeRelease(m_sampler3);
+    SafeRelease(m_sampler4);
+    SafeRelease(m_sampler5);
+}
+
 ID3D11Device *ContextD3D11::getDevice() {
-    return m_device.Get();
+    return m_device;
 }
 
 ID3D11DeviceContext *ContextD3D11::getContext() {
-    return m_deviceContext.Get();
+    return m_deviceContext;
 }
 
 NvFlowContextAPI ContextD3D11::getContextType() {
@@ -143,115 +174,115 @@ void ContextD3D11::clearRenderTarget(RenderTarget *rtv, const float color[4]) {
 }
 
 void ContextD3D11::contextPush() {
-    auto ctx = m_deviceContext.Get();
-    ctx->IAGetIndexBuffer(&m_state.indexBuffer, &m_state.indexFormat, &m_state.indexOffset);
-    ctx->IAGetInputLayout(&m_state.layout);
-    ctx->IAGetPrimitiveTopology(&m_state.topology);
+    auto context = m_deviceContext;
+    context->IAGetIndexBuffer(&m_state.indexBuffer, &m_state.indexFormat, &m_state.indexOffset);
+    context->IAGetInputLayout(&m_state.layout);
+    context->IAGetPrimitiveTopology(&m_state.topology);
 
     m_state.vertexBuffers.resize(16);
     m_state.vertexStrides.resize(16);
     m_state.vertexOffsets.resize(16);
 
-    ctx->IAGetVertexBuffers(0, 16, m_state.vertexBuffers.data(),
+    context->IAGetVertexBuffers(0, 16, m_state.vertexBuffers.data(),
                             m_state.vertexStrides.data(), m_state.vertexOffsets.data());
 
-    ctx->OMGetBlendState(&m_state.blendState, m_state.blendFactor,
+    context->OMGetBlendState(&m_state.blendState, m_state.blendFactor,
                          &m_state.blendSampleMask);
 
-    ctx->OMGetDepthStencilState(&m_state.depthStencilState, &m_state.stencilRef);
+    context->OMGetDepthStencilState(&m_state.depthStencilState, &m_state.stencilRef);
 
     m_state.renderTargetViews.resize(8);
-    ctx->OMGetRenderTargets(8, m_state.renderTargetViews.data(), &m_state.depthStencilView);
+    context->OMGetRenderTargets(8, m_state.renderTargetViews.data(), &m_state.depthStencilView);
 
     m_state.scissorRects.reserve(16);
-    UINT numScissorRects;
-    ctx->RSGetScissorRects(&numScissorRects, nullptr);
+    UINT numScissorRects = 0;
+    context->RSGetScissorRects(&numScissorRects, nullptr);
     m_state.scissorRects.resize(numScissorRects);
-    ctx->RSGetScissorRects(&numScissorRects, m_state.scissorRects.data());
+    context->RSGetScissorRects(&numScissorRects, m_state.scissorRects.data());
 
-    ctx->RSGetState(&m_state.rasterizerState);
+    context->RSGetState(&m_state.rasterizerState);
 
     m_state.viewports.reserve(16);
-    UINT numViewports;
-    ctx->RSGetViewports(&numViewports, nullptr);
+    UINT numViewports = 0;
+    context->RSGetViewports(&numViewports, nullptr);
     m_state.viewports.resize(numViewports);
-    ctx->RSGetViewports(&numViewports, m_state.viewports.data());
+    context->RSGetViewports(&numViewports, m_state.viewports.data());
 
     m_state.vsConstantBuffers.resize(8);
-    ctx->VSGetConstantBuffers(0, 8, m_state.vsConstantBuffers.data());
+    context->VSGetConstantBuffers(0, 8, m_state.vsConstantBuffers.data());
     m_state.vsSamplers.resize(8);
-    ctx->VSGetSamplers(0, 8, m_state.vsSamplers.data());
+    context->VSGetSamplers(0, 8, m_state.vsSamplers.data());
     m_state.vsSrvs.resize(16);
-    ctx->VSGetShaderResources(0, 16, m_state.vsSrvs.data());
+    context->VSGetShaderResources(0, 16, m_state.vsSrvs.data());
 
     m_state.psConstantBuffers.resize(8);
-    ctx->PSGetConstantBuffers(0, 8, m_state.psConstantBuffers.data());
+    context->PSGetConstantBuffers(0, 8, m_state.psConstantBuffers.data());
     m_state.psSamplers.resize(8);
-    ctx->PSGetSamplers(0, 8, m_state.psSamplers.data());
+    context->PSGetSamplers(0, 8, m_state.psSamplers.data());
     m_state.psSrvs.resize(16);
-    ctx->PSGetShaderResources(0, 16, m_state.psSrvs.data());
+    context->PSGetShaderResources(0, 16, m_state.psSrvs.data());
 
     m_state.csConstantBuffers.resize(8);
-    ctx->CSGetConstantBuffers(0, 8, m_state.csConstantBuffers.data());
+    context->CSGetConstantBuffers(0, 8, m_state.csConstantBuffers.data());
     m_state.csSamplers.resize(8);
-    ctx->CSGetSamplers(0, 8, m_state.csSamplers.data());
+    context->CSGetSamplers(0, 8, m_state.csSamplers.data());
     m_state.csSrvs.resize(16);
-    ctx->CSGetShaderResources(0, 16, m_state.csSrvs.data());
+    context->CSGetShaderResources(0, 16, m_state.csSrvs.data());
     m_state.csUavs.resize(8);
-    ctx->CSGetUnorderedAccessViews(0, 8, m_state.csUavs.data());
+    context->CSGetUnorderedAccessViews(0, 8, m_state.csUavs.data());
 
-    ctx->CSGetShader(&m_state.computeShader, nullptr, nullptr);
-    ctx->VSGetShader(&m_state.vertexShader, nullptr, nullptr);
-    ctx->PSGetShader(&m_state.pixelShader, nullptr, nullptr);
-    ctx->GSGetShader(&m_state.geometryShader, nullptr, nullptr);
-    ctx->HSGetShader(&m_state.hullShader, nullptr, nullptr);
-    ctx->DSGetShader(&m_state.domainShader, nullptr, nullptr);
+    context->CSGetShader(&m_state.computeShader, nullptr, nullptr);
+    context->VSGetShader(&m_state.vertexShader, nullptr, nullptr);
+    context->PSGetShader(&m_state.pixelShader, nullptr, nullptr);
+    context->GSGetShader(&m_state.geometryShader, nullptr, nullptr);
+    context->HSGetShader(&m_state.hullShader, nullptr, nullptr);
+    context->DSGetShader(&m_state.domainShader, nullptr, nullptr);
 
     //
-    ctx->RSSetState(nullptr);
-    ctx->OMSetBlendState(nullptr, nullptr, UINT(-1));
-    ctx->OMSetDepthStencilState(nullptr, 0);
+    context->RSSetState(nullptr);
+    context->OMSetBlendState(nullptr, nullptr, UINT(-1));
+    context->OMSetDepthStencilState(nullptr, 0);
 
-    ctx->CSSetShader(nullptr, nullptr, 0);
-    ctx->VSSetShader(nullptr, nullptr, 0);
-    ctx->PSSetShader(nullptr, nullptr, 0);
-    ctx->GSSetShader(nullptr, nullptr, 0);
-    ctx->HSSetShader(nullptr, nullptr, 0);
-    ctx->DSSetShader(nullptr, nullptr, 0);
+    context->CSSetShader(nullptr, nullptr, 0);
+    context->VSSetShader(nullptr, nullptr, 0);
+    context->PSSetShader(nullptr, nullptr, 0);
+    context->GSSetShader(nullptr, nullptr, 0);
+    context->HSSetShader(nullptr, nullptr, 0);
+    context->DSSetShader(nullptr, nullptr, 0);
 }
 
 void ContextD3D11::contextPop() {
-    auto ctx = m_deviceContext.Get();
-    ctx->IASetInputLayout(m_state.layout);
-    ctx->IASetPrimitiveTopology(m_state.topology);
-    ctx->IASetVertexBuffers(0, m_state.vertexBuffers.size(), m_state.vertexBuffers.data(),
+    auto context = m_deviceContext;
+    context->IASetInputLayout(m_state.layout);
+    context->IASetPrimitiveTopology(m_state.topology);
+    context->IASetVertexBuffers(0, m_state.vertexBuffers.size(), m_state.vertexBuffers.data(),
                             m_state.vertexStrides.data(), m_state.vertexOffsets.data());
-    ctx->OMSetBlendState(m_state.blendState, m_state.blendFactor, m_state.blendSampleMask);
-    ctx->OMSetDepthStencilState(m_state.depthStencilState, m_state.stencilRef);
-    ctx->OMSetRenderTargets(8, m_state.renderTargetViews.data(), m_state.depthStencilView);
-    ctx->RSSetScissorRects(m_state.scissorRects.size(), m_state.scissorRects.data());
-    ctx->RSSetState(m_state.rasterizerState);
-    ctx->RSSetViewports(m_state.viewports.size(), m_state.viewports.data());
+    context->OMSetBlendState(m_state.blendState, m_state.blendFactor, m_state.blendSampleMask);
+    context->OMSetDepthStencilState(m_state.depthStencilState, m_state.stencilRef);
+    context->OMSetRenderTargets(8, m_state.renderTargetViews.data(), m_state.depthStencilView);
+    context->RSSetScissorRects(m_state.scissorRects.size(), m_state.scissorRects.data());
+    context->RSSetState(m_state.rasterizerState);
+    context->RSSetViewports(m_state.viewports.size(), m_state.viewports.data());
 
-    ctx->VSSetConstantBuffers(0, 8, m_state.vsConstantBuffers.data());
-    ctx->VSSetSamplers(0, 8, m_state.vsSamplers.data());
-    ctx->VSSetShaderResources(0, 16, m_state.vsSrvs.data());
+    context->VSSetConstantBuffers(0, 8, m_state.vsConstantBuffers.data());
+    context->VSSetSamplers(0, 8, m_state.vsSamplers.data());
+    context->VSSetShaderResources(0, 16, m_state.vsSrvs.data());
 
-    ctx->PSSetConstantBuffers(0, 8, m_state.psConstantBuffers.data());
-    ctx->PSSetSamplers(0, 8, m_state.psSamplers.data());
-    ctx->PSSetShaderResources(0, 16, m_state.psSrvs.data());
+    context->PSSetConstantBuffers(0, 8, m_state.psConstantBuffers.data());
+    context->PSSetSamplers(0, 8, m_state.psSamplers.data());
+    context->PSSetShaderResources(0, 16, m_state.psSrvs.data());
 
-    ctx->CSSetConstantBuffers(0, 8, m_state.csConstantBuffers.data());
-    ctx->CSSetSamplers(0, 8, m_state.csSamplers.data());
-    ctx->CSSetShaderResources(0, 16, m_state.csSrvs.data());
-    ctx->CSSetUnorderedAccessViews(0, 8, m_state.csUavs.data(), nullptr);
+    context->CSSetConstantBuffers(0, 8, m_state.csConstantBuffers.data());
+    context->CSSetSamplers(0, 8, m_state.csSamplers.data());
+    context->CSSetShaderResources(0, 16, m_state.csSrvs.data());
+    context->CSSetUnorderedAccessViews(0, 8, m_state.csUavs.data(), nullptr);
 
-    ctx->CSSetShader(m_state.computeShader, nullptr, 0);
-    ctx->VSSetShader(m_state.vertexShader, nullptr, 0);
-    ctx->HSSetShader(m_state.hullShader, nullptr, 0);
-    ctx->DSSetShader(m_state.domainShader, nullptr, 0);
-    ctx->GSSetShader(m_state.geometryShader, nullptr, 0);
-    ctx->PSSetShader(m_state.pixelShader, nullptr, 0);
+    context->CSSetShader(m_state.computeShader, nullptr, 0);
+    context->VSSetShader(m_state.vertexShader, nullptr, 0);
+    context->HSSetShader(m_state.hullShader, nullptr, 0);
+    context->DSSetShader(m_state.domainShader, nullptr, 0);
+    context->GSSetShader(m_state.geometryShader, nullptr, 0);
+    context->PSSetShader(m_state.pixelShader, nullptr, 0);
 
     m_state.reset();
 }
@@ -457,11 +488,13 @@ void ContextD3D11::dispatch(const NvFlowDispatchParams *params) {
             context->CSSetConstantBuffers(1, 1, &cbv);
         }
 
-        context->CSSetSamplers(0, 6, m_sampler0.GetAddressOf());
+        context->CSSetSamplers(0, 6, &m_sampler0);
 
-        if (m_profiler) m_profiler->begin(shader->m_desc.label);
+        if (m_d3dAnnotation)
+            m_d3dAnnotation->BeginEvent(shader->m_desc.label);
         context->Dispatch(params->gridDim.x, params->gridDim.y, params->gridDim.z);
-        if (m_profiler) m_profiler->end();
+        if (m_d3dAnnotation)
+            m_d3dAnnotation->EndEvent();
 
         // Reset SRVS and UAVS
         ZeroMemory(srvs, sizeof(srvs));
@@ -567,12 +600,14 @@ void ContextD3D11::drawIndexedInstanced(uint32_t indicesPerInstance, uint32_t nu
         context->PSSetConstantBuffers(0, 1, &cbv);
     }
 
-    context->VSSetSamplers(0, 6, m_sampler0.GetAddressOf());
-    context->PSSetSamplers(0, 6, m_sampler0.GetAddressOf());
+    context->VSSetSamplers(0, 6, &m_sampler0);
+    context->PSSetSamplers(0, 6, &m_sampler0);
 
-    if (m_profiler) m_profiler->begin(shader->m_desc.label);
+    if (m_d3dAnnotation)
+        m_d3dAnnotation->BeginEvent(shader->m_desc.label);
     context->DrawIndexedInstanced(indicesPerInstance, numInstances, 0, 0, 0);
-    if (m_profiler) m_profiler->end();
+    if (m_d3dAnnotation)
+        m_d3dAnnotation->EndEvent();
 
     ZeroMemory(ps_srvs, sizeof(ps_srvs));
     ZeroMemory(ps_uavs, sizeof(ps_uavs));
@@ -741,7 +776,7 @@ void ContextD3D11::timerBegin(Timer *timerIn) {
     if (!timer->m_state) {
         auto context = getContext();
         QueryPerformanceFrequency(&timer->m_cpuFreq);
-        QueryPerformanceFrequency(&timer->m_cpuBegin);
+        QueryPerformanceCounter(&timer->m_cpuBegin);
         context->Begin(timer->m_disjoint.Get());
         context->End(timer->m_begin.Get());
         timer->m_state = 1;
@@ -759,9 +794,10 @@ void ContextD3D11::timerEnd(Timer *timerIn) {
     }
 }
 
-int ContextD3D11::timerGetResult(Timer *timerIn, float *timeGPU, float *timeCPU) {
+NvFlowResult ContextD3D11::timerGetResult(Timer *timerIn, float *timeGPU, float *timeCPU) {
     auto timer = implCast<TimerD3D11>(timerIn);
-    if (timer->m_state != 2) return 1;
+    if (timer->m_state != 2)
+        return eNvFlowFail;
 
     HRESULT hr;
     auto context = getContext();
@@ -769,34 +805,31 @@ int ContextD3D11::timerGetResult(Timer *timerIn, float *timeGPU, float *timeCPU)
     INT64 tsBegin, tsEnd;
 
     hr = context->GetData(timer->m_disjoint.Get(), &tsDisjoint, sizeof(tsDisjoint), 0);
-    if (FAILED(hr)) return 1;
+    if (FAILED(hr))
+        return eNvFlowFail;
 
-    if (tsDisjoint.Disjoint) return 1;
+    if (tsDisjoint.Disjoint)
+        return eNvFlowFail;
 
     hr = context->GetData(timer->m_begin.Get(), &tsBegin, sizeof(tsBegin), 0);
-    if (FAILED(hr)) return 1;
+    if (FAILED(hr))
+        return eNvFlowFail;
 
     hr = context->GetData(timer->m_end.Get(), &tsEnd, sizeof(tsEnd), 0);
-    if (FAILED(hr)) return 1;
+    if (FAILED(hr))
+        return eNvFlowFail;
 
     float tsDiff = float(tsEnd - tsBegin);
-    constexpr float FltMax = 1.8446744e19f;  // 2^64
-    if (tsEnd < tsBegin) tsDiff = tsDiff + FltMax;
+    float msGPU = tsDiff / float(tsDisjoint.Frequency);
 
-    float Frequency_low = float(tsDisjoint.Frequency);
-    if ((tsDisjoint.Frequency & 0x8000000000000000i64) != 0i64)
-        Frequency_low = Frequency_low + FltMax;
-
-    float msGPU = tsDiff / Frequency_low;
-
-    float msCPU = (double)(int)(timer->m_cpuEnd.QuadPart - timer->m_cpuBegin.QuadPart) /
-                  (double)(int)timer->m_cpuFreq.QuadPart;
+    float msCPU = (double)(timer->m_cpuEnd.QuadPart - timer->m_cpuBegin.QuadPart) /
+                  (double)timer->m_cpuFreq.QuadPart;
 
     if (timeGPU) *timeGPU = msGPU;
     if (timeCPU) *timeCPU = msCPU;
 
-    timer->m_state = 1;
-    return 0;
+    timer->m_state = 0;
+    return eNvFlowSuccess;
 }
 
 void ContextD3D11::transitionToCommonState(Resource *resource) {}
@@ -897,7 +930,7 @@ void ContextD3D11::updateVTRMapping(Texture3DVTR *textureIn, HeapVTR *heapIn,
 
     uint32_t tileID;
     uint32_t index = 0;
-    auto currentImage = texture->m_blockTable;
+    auto &currentImage = texture->m_blockTable;
     for (int k = 0; k < currentImage.dim().z; ++k)
         for (int j = 0; j < currentImage.dim().y; ++j)
             for (int i = 0; i < currentImage.dim().x; ++i) {
@@ -917,7 +950,8 @@ void ContextD3D11::updateVTRMapping(Texture3DVTR *textureIn, HeapVTR *heapIn,
                     regionSize.NumTiles = 1;
                     regionSize.bUseBox = FALSE;
                     regionSize.Width = 1;
-                    regionSize.Height = 65537;
+                    regionSize.Height = 1;
+                    regionSize.Depth = 1;
                     m_tileRegionSize[index] = regionSize;
 
                     m_rangeFlags[index] =
@@ -1001,19 +1035,25 @@ void ContextD3D11::updateResourceViewDesc(ResourceD3D11 *resourceIn,
 }
 
 void ContextD3D11::updateContext(const NvFlowContextDescD3D11 *pdesc) {
+    SafeRelease(m_device);
+    SafeRelease(m_deviceContext);
+    SafeRelease(m_d3dAnnotation);
+
     m_device = pdesc->device;
+    m_device->AddRef();
     m_deviceContext = pdesc->deviceContext;
+    m_deviceContext->AddRef();
     m_deviceContext->QueryInterface(IID_PPV_ARGS(&m_d3dAnnotation));
 }
 
 void ContextD3D11::updateContextDesc(NvFlowContextDescD3D11 *desc) {
-    desc->device = m_device.Get();
-    desc->deviceContext = m_deviceContext.Get();
+    desc->device = m_device;
+    desc->deviceContext = m_deviceContext;
 }
 
-BufferD3D11::BufferD3D11(ContextD3D11 *ctx, BufferD3D11 *buffer,
+BufferD3D11::BufferD3D11(ContextD3D11 *context, BufferD3D11 *buffer,
                          const NvFlowBufferViewDesc *desc)
-    : Object(ctx->getDeferredRelease()) {
+    : Object(context->getDeferredRelease()) {
     m_desc = buffer->m_desc;
     uint32_t srcFormatSize = getFormatSizeInBytes(m_desc.format);
     m_desc.format = desc->format;
@@ -1026,18 +1066,18 @@ BufferD3D11::BufferD3D11(ContextD3D11 *ctx, BufferD3D11 *buffer,
     srvDesc.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
     srvDesc.Buffer.FirstElement = 0;
     srvDesc.Buffer.NumElements = m_desc.dim;
-    ctx->getDevice()->CreateShaderResourceView(m_buffer.Get(), &srvDesc, &m_srv);
+    context->getDevice()->CreateShaderResourceView(m_buffer.Get(), &srvDesc, &m_srv);
 
     D3D11_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
     uavDesc.Format = srvDesc.Format;
     uavDesc.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
     uavDesc.Buffer.FirstElement = 0;
     uavDesc.Buffer.NumElements = m_desc.dim;
-    ctx->getDevice()->CreateUnorderedAccessView(m_buffer.Get(), &uavDesc, &m_uav);
+    context->getDevice()->CreateUnorderedAccessView(m_buffer.Get(), &uavDesc, &m_uav);
 }
 
-BufferD3D11::BufferD3D11(ContextD3D11 *ctx, const NvFlowBufferDesc *desc)
-    : Object(ctx->getDeferredRelease()) {
+BufferD3D11::BufferD3D11(ContextD3D11 *context, const NvFlowBufferDesc *desc)
+    : Object(context->getDeferredRelease()) {
     m_desc = *desc;
 
     D3D11_BUFFER_DESC bufDesc = {};
@@ -1046,7 +1086,7 @@ BufferD3D11::BufferD3D11(ContextD3D11 *ctx, const NvFlowBufferDesc *desc)
     bufDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
     bufDesc.CPUAccessFlags = 0;
     bufDesc.MiscFlags = 0;
-    auto device = ctx->getDevice();
+    auto device = context->getDevice();
     device->CreateBuffer(&bufDesc, nullptr, &m_buffer);
 
     D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
@@ -1056,7 +1096,7 @@ BufferD3D11::BufferD3D11(ContextD3D11 *ctx, const NvFlowBufferDesc *desc)
     srvDesc.Buffer.NumElements = m_desc.dim;
     device->CreateShaderResourceView(m_buffer.Get(), &srvDesc, &m_srv);
 
-    D3D11_UNORDERED_ACCESS_VIEW_DESC uavDesc;
+    D3D11_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
     uavDesc.Format = convertToDXGI(m_desc.format);
     uavDesc.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
     uavDesc.Buffer.FirstElement = 0;
@@ -1082,9 +1122,9 @@ uint64_t BufferD3D11::getGPUBytesUsed() {
     return getFormatSizeInBytes(m_desc.format) * m_desc.dim;
 }
 
-ConstantBufferD3D11::ConstantBufferD3D11(ContextD3D11 *ctx,
+ConstantBufferD3D11::ConstantBufferD3D11(ContextD3D11 *context,
                                          const NvFlowConstantBufferDesc *desc)
-    : Object(ctx->getDeferredRelease()) {
+    : Object(context->getDeferredRelease()) {
     m_desc = *desc;
     UINT byteWidth = alignUp<16>(desc->sizeInBytes);
 
@@ -1099,15 +1139,15 @@ ConstantBufferD3D11::ConstantBufferD3D11(ContextD3D11 *ctx,
         bufDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
         bufDesc.CPUAccessFlags = 0;
     }
-    ctx->getDevice()->CreateBuffer(&bufDesc, nullptr, &m_buffer);
+    context->getDevice()->CreateBuffer(&bufDesc, nullptr, &m_buffer);
 }
 
 uint64_t ConstantBufferD3D11::getGPUBytesUsed() {
     return alignUp<16>(m_desc.sizeInBytes);
 }
 
-VertexBufferD3D11::VertexBufferD3D11(ContextD3D11 *ctx, const NvFlowVertexBufferDesc *desc)
-    : Object(ctx->getDeferredRelease()) {
+VertexBufferD3D11::VertexBufferD3D11(ContextD3D11 *context, const NvFlowVertexBufferDesc *desc)
+    : Object(context->getDeferredRelease()) {
     m_desc = *desc;
 
     D3D11_BUFFER_DESC bufDesc = {};
@@ -1120,20 +1160,20 @@ VertexBufferD3D11::VertexBufferD3D11(ContextD3D11 *ctx, const NvFlowVertexBuffer
     D3D11_SUBRESOURCE_DATA initData = {};
     initData.pSysMem = desc->data;
     initData.SysMemPitch = desc->sizeInBytes;
-    ctx->getDevice()->CreateBuffer(&bufDesc, &initData, &m_buffer);
+    context->getDevice()->CreateBuffer(&bufDesc, &initData, &m_buffer);
 
     bufDesc.Usage = D3D11_USAGE_DYNAMIC;
     bufDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
     bufDesc.MiscFlags = 0;
-    ctx->getDevice()->CreateBuffer(&bufDesc, nullptr, &m_uploadBuffer);
+    context->getDevice()->CreateBuffer(&bufDesc, nullptr, &m_uploadBuffer);
 }
 
 uint64_t VertexBufferD3D11::getGPUBytesUsed() {
     return m_desc.sizeInBytes;
 }
 
-IndexBufferD3D11::IndexBufferD3D11(ContextD3D11 *ctx, const NvFlowIndexBufferDesc *desc)
-    : Object(ctx->getDeferredRelease()) {
+IndexBufferD3D11::IndexBufferD3D11(ContextD3D11 *context, const NvFlowIndexBufferDesc *desc)
+    : Object(context->getDeferredRelease()) {
     m_desc = *desc;
     m_format = convertToDXGI(m_desc.format);
 
@@ -1147,20 +1187,20 @@ IndexBufferD3D11::IndexBufferD3D11(ContextD3D11 *ctx, const NvFlowIndexBufferDes
     D3D11_SUBRESOURCE_DATA initData = {};
     initData.pSysMem = desc->data;
     initData.SysMemPitch = desc->sizeInBytes;
-    ctx->getDevice()->CreateBuffer(&bufDesc, &initData, &m_buffer);
+    context->getDevice()->CreateBuffer(&bufDesc, &initData, &m_buffer);
 
     bufDesc.Usage = D3D11_USAGE_DYNAMIC;
     bufDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
     bufDesc.MiscFlags = 0;
-    ctx->getDevice()->CreateBuffer(&bufDesc, nullptr, &m_uploadBuffer);
+    context->getDevice()->CreateBuffer(&bufDesc, nullptr, &m_uploadBuffer);
 }
 
 uint64_t IndexBufferD3D11::getGPUBytesUsed() {
     return m_desc.sizeInBytes;
 }
 
-Texture1DD3D11::Texture1DD3D11(ContextD3D11 *ctx, const NvFlowTexture1DDesc *desc)
-    : Object(ctx->getDeferredRelease()) {
+Texture1DD3D11::Texture1DD3D11(ContextD3D11 *context, const NvFlowTexture1DDesc *desc)
+    : Object(context->getDeferredRelease()) {
     m_desc = *desc;
 
     D3D11_TEXTURE1D_DESC texDesc = {};
@@ -1172,7 +1212,7 @@ Texture1DD3D11::Texture1DD3D11(ContextD3D11 *ctx, const NvFlowTexture1DDesc *des
     texDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
     texDesc.CPUAccessFlags = 0;
     texDesc.MiscFlags = 0;
-    auto device = ctx->getDevice();
+    auto device = context->getDevice();
     device->CreateTexture1D(&texDesc, nullptr, &m_texture);
 
     device->CreateShaderResourceView(m_texture.Get(), nullptr, &m_srv);
@@ -1180,7 +1220,7 @@ Texture1DD3D11::Texture1DD3D11(ContextD3D11 *ctx, const NvFlowTexture1DDesc *des
 
     if (m_desc.uploadAccess) {
         texDesc.Usage = D3D11_USAGE_DYNAMIC;
-        texDesc.BindFlags = 0;
+        texDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
         texDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
         device->CreateTexture1D(&texDesc, nullptr, &m_uploadTexture);
     }
@@ -1190,9 +1230,9 @@ uint64_t Texture1DD3D11::getGPUBytesUsed() {
     return getFormatSizeInBytes(m_desc.format) * m_desc.dim;
 }
 
-Texture2DD3D11::Texture2DD3D11(ContextD3D11 *ctx, const NvFlowTexture2DDesc *desc,
+Texture2DD3D11::Texture2DD3D11(ContextD3D11 *context, const NvFlowTexture2DDesc *desc,
                                bool createShared)
-    : Object(ctx->getDeferredRelease()) {
+    : Object(context->getDeferredRelease()) {
     m_desc = *desc;
 
     D3D11_TEXTURE2D_DESC texDesc = {};
@@ -1207,7 +1247,7 @@ Texture2DD3D11::Texture2DD3D11(ContextD3D11 *ctx, const NvFlowTexture2DDesc *des
     texDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
     texDesc.CPUAccessFlags = 0;
     texDesc.MiscFlags = createShared ? D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX : 0;
-    auto device = ctx->getDevice();
+    auto device = context->getDevice();
     device->CreateTexture2D(&texDesc, nullptr, &m_texture);
 
     device->CreateShaderResourceView(m_texture.Get(), nullptr, &m_srv);
@@ -1220,11 +1260,11 @@ Texture2DD3D11::Texture2DD3D11(ContextD3D11 *ctx, const NvFlowTexture2DDesc *des
     }
 }
 
-Texture2DD3D11::Texture2DD3D11(ContextD3D11 *ctx, Texture2D *sharedTexture, bool openShared)
-    : Object(ctx->getDeferredRelease()) {
+Texture2DD3D11::Texture2DD3D11(ContextD3D11 *context, Texture2D *sharedTexture, bool openShared)
+    : Object(context->getDeferredRelease()) {
     m_desc = sharedTexture->m_desc;
 
-    auto device = ctx->getDevice();
+    auto device = context->getDevice();
 
     if (openShared) {
         HANDLE sharedHandle;
@@ -1256,10 +1296,10 @@ uint64_t Texture2DD3D11::getGPUBytesUsed() {
     return getFormatSizeInBytes(m_desc.format) * m_desc.width * m_desc.height;
 }
 
-Texture3DD3D11::Texture3DD3D11(ContextD3D11 *ctx, const NvFlowTexture3DDesc *desc)
-    : Object(ctx->getDeferredRelease()) {
+Texture3DD3D11::Texture3DD3D11(ContextD3D11 *context, const NvFlowTexture3DDesc *desc)
+    : Object(context->getDeferredRelease()) {
     m_desc = *desc;
-    auto device = ctx->getDevice();
+    auto device = context->getDevice();
 
     D3D11_TEXTURE3D_DESC texDesc = {};
     texDesc.Width = m_desc.dim.x;
@@ -1279,7 +1319,7 @@ Texture3DD3D11::Texture3DD3D11(ContextD3D11 *ctx, const NvFlowTexture3DDesc *des
 
     if (m_desc.uploadAccess) {
         texDesc.Usage = D3D11_USAGE_DYNAMIC;
-        texDesc.BindFlags = 0;
+        texDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
         texDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
         device->CreateTexture3D(&texDesc, nullptr, &m_uploadTexture);
     }
@@ -1297,8 +1337,8 @@ uint64_t Texture3DD3D11::getGPUBytesUsed() {
     return sz * m_desc.dim.x * m_desc.dim.y * m_desc.dim.z;
 }
 
-ResourceReferenceD3D11::ResourceReferenceD3D11(ContextD3D11 *ctx, ResourceD3D11 *resource)
-    : Object(ctx->getDeferredRelease()) {
+ResourceReferenceD3D11::ResourceReferenceD3D11(ContextD3D11 *context, ResourceD3D11 *resource)
+    : Object(context->getDeferredRelease()) {
     resource->m_srv->GetResource(&m_resource);
 }
 
@@ -1306,8 +1346,8 @@ uint64_t ResourceReferenceD3D11::getGPUBytesUsed() {
     return 0;
 }
 
-HeapVTRD3D11::HeapVTRD3D11(ContextD3D11 *ctx, const NvFlowHeapSparseDesc *desc)
-    : Object(ctx->getDeferredRelease()) {
+HeapVTRD3D11::HeapVTRD3D11(ContextD3D11 *context, const NvFlowHeapSparseDesc *desc)
+    : Object(context->getDeferredRelease()) {
     m_desc = *desc;
 
     constexpr uint32_t tileSize = 0x10000;  // 64K
@@ -1320,23 +1360,23 @@ HeapVTRD3D11::HeapVTRD3D11(ContextD3D11 *ctx, const NvFlowHeapSparseDesc *desc)
     bufDesc.CPUAccessFlags = 0;
     bufDesc.MiscFlags = D3D11_RESOURCE_MISC_TILE_POOL;
     bufDesc.StructureByteStride = 0;
-    ctx->getDevice()->CreateBuffer(&bufDesc, nullptr, &m_heap);
+    context->getDevice()->CreateBuffer(&bufDesc, nullptr, &m_heap);
 }
 
 uint64_t HeapVTRD3D11::getGPUBytesUsed() {
     return m_desc.sizeInBytes;
 }
 
-Texture3DVTRD3D11::Texture3DVTRD3D11(ContextD3D11 *ctx,
+Texture3DVTRD3D11::Texture3DVTRD3D11(ContextD3D11 *context,
                                      const NvFlowTexture3DSparseDesc *desc)
-    : Object(ctx->getDeferredRelease()) {
+    : Object(context->getDeferredRelease()) {
     m_desc = *desc;
-    auto device = ctx->getDevice();
+    auto device = context->getDevice();
 
     D3D11_TEXTURE3D_DESC texDesc = {};
     texDesc.Width = m_desc.dim.x;
     texDesc.Height = m_desc.dim.y;
-    texDesc.Height = m_desc.dim.z;
+    texDesc.Depth = m_desc.dim.z;
     texDesc.MipLevels = 1;
     texDesc.Format = convertToDXGI(m_desc.format);
     texDesc.Usage = D3D11_USAGE_DEFAULT;
@@ -1350,26 +1390,27 @@ Texture3DVTRD3D11::Texture3DVTRD3D11(ContextD3D11 *ctx,
 
     m_blockDim = getTileDim(m_desc.format);
     m_gridDim = m_desc.dim / m_blockDim;
-    m_blockTable.resize(m_gridDim);
+    m_blockTable.init(m_gridDim);
+    ZeroMemory(m_blockTable.data(), m_blockTable.dim1() * sizeof(uint32_t));
 }
 
 uint64_t Texture3DVTRD3D11::getGPUBytesUsed() {
     return 0;
 }
 
-ColorBufferD3D11::ColorBufferD3D11(ContextD3D11 *ctx, const NvFlowColorBufferDesc *desc)
-    : Object(ctx->getDeferredRelease()) {
-    auto device = ctx->getDevice();
+ColorBufferD3D11::ColorBufferD3D11(ContextD3D11 *context, const NvFlowColorBufferDesc *desc)
+    : Object(context->getDeferredRelease()) {
+    m_desc = *desc;
 
-    m_rt_format = desc->format;
+    auto device = context->getDevice();
+
+    m_rt_format = m_desc.format;
     m_viewport.topLeftX = 0.f;
     m_viewport.topLeftY = 0.f;
     m_viewport.width = (float)m_desc.width;
-    m_viewport.height = (float)desc->height;
+    m_viewport.height = (float)m_desc.height;
     m_viewport.minDepth = 0.f;
-    m_viewport.maxDepth = FLOAT_1_0;
-
-    m_desc = *desc;
+    m_viewport.maxDepth = 1.f;
 
     D3D11_TEXTURE2D_DESC texDesc = {};
     texDesc.Width = m_desc.width;
@@ -1396,8 +1437,8 @@ uint64_t ColorBufferD3D11::getGPUBytesUsed() {
     return sz;
 }
 
-DepthBufferD3D11::DepthBufferD3D11(ContextD3D11 *ctx, const NvFlowDepthBufferDesc *desc)
-    : Object(ctx->getDeferredRelease()) {
+DepthBufferD3D11::DepthBufferD3D11(ContextD3D11 *context, const NvFlowDepthBufferDesc *desc)
+    : Object(context->getDeferredRelease()) {
     m_desc = *desc;
     m_ds_format = m_desc.format_dsv;
     m_viewport.topLeftX = 0.f;
@@ -1405,9 +1446,9 @@ DepthBufferD3D11::DepthBufferD3D11(ContextD3D11 *ctx, const NvFlowDepthBufferDes
     m_viewport.width = (float)m_desc.width;
     m_viewport.height = (float)m_desc.height;
     m_viewport.minDepth = 0.f;
-    m_viewport.maxDepth = FLOAT_1_0;
+    m_viewport.maxDepth = 1.f;
 
-    auto device = ctx->getDevice();
+    auto device = context->getDevice();
 
     D3D11_TEXTURE2D_DESC texDesc = {};
     texDesc.Width = m_desc.width;
@@ -1427,7 +1468,7 @@ DepthBufferD3D11::DepthBufferD3D11(ContextD3D11 *ctx, const NvFlowDepthBufferDes
     dsvDesc.Format = convertToDXGI(m_desc.format_dsv);
     dsvDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
     dsvDesc.Flags = 0;
-    dsvDesc.Texture2D.MipSlice = 1;
+    dsvDesc.Texture2D.MipSlice = 0;
     device->CreateDepthStencilView(m_texture.Get(), &dsvDesc, &m_dsv);
 
     D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
@@ -1443,9 +1484,9 @@ uint64_t DepthBufferD3D11::getGPUBytesUsed() {
     return sz;
 }
 
-DepthStencilViewD3D11::DepthStencilViewD3D11(ContextD3D11 *ctx,
+DepthStencilViewD3D11::DepthStencilViewD3D11(ContextD3D11 *context,
                                              const NvFlowDepthStencilViewDescD3D11 *desc)
-    : Object(ctx->getDeferredRelease()) {
+    : Object(context->getDeferredRelease()) {
     update(desc);
 }
 
@@ -1516,9 +1557,9 @@ int64_t FlowDeferredReleaseD3D11(float timeoutMS) {
     return 0;
 }
 
-RenderTargetViewD3D11::RenderTargetViewD3D11(ContextD3D11 *ctx,
+RenderTargetViewD3D11::RenderTargetViewD3D11(ContextD3D11 *context,
                                              const NvFlowRenderTargetViewDescD3D11 *desc)
-    : Object(ctx->getDeferredRelease()) {
+    : Object(context->getDeferredRelease()) {
     update(desc);
 }
 
@@ -1530,31 +1571,31 @@ void RenderTargetViewD3D11::update(const NvFlowRenderTargetViewDescD3D11 *desc) 
     m_desc = *desc;
 
     D3D11_RENDER_TARGET_VIEW_DESC rtvDesc;
-    m_rtv->GetDesc(&rtvDesc);
+    m_desc.rtv->GetDesc(&rtvDesc);
     m_rt_format = convertToNvFlow(rtvDesc.Format);
     m_rtv = m_desc.rtv;
     copyViewport(&m_viewport, &m_desc.viewport);
 }
 
-ComputeShaderD3D11::ComputeShaderD3D11(ContextD3D11 *ctx,
+ComputeShaderD3D11::ComputeShaderD3D11(ContextD3D11 *context,
                                        const NvFlowComputeShaderDesc *desc)
-    : Object(ctx->getDeferredRelease()) {
+    : Object(context->getDeferredRelease()) {
     m_desc = *desc;
     if (!m_desc.label) m_desc.label = L"unlabeled";
-    ctx->getDevice()->CreateComputeShader(m_desc.cs, m_desc.cs_length, nullptr, &m_cs);
+    context->getDevice()->CreateComputeShader(m_desc.cs, m_desc.cs_length, nullptr, &m_cs);
 }
 
 uint64_t ComputeShaderD3D11::getGPUBytesUsed() {
     return Object::getGPUBytesUsed();
 }
 
-GraphicsShaderD3D11::GraphicsShaderD3D11(ContextD3D11 *ctx,
+GraphicsShaderD3D11::GraphicsShaderD3D11(ContextD3D11 *context,
                                          const NvFlowGraphicsShaderDesc *desc)
-    : Object(ctx->getDeferredRelease()) {
+    : Object(context->getDeferredRelease()) {
     m_desc = *desc;
     m_inputElementDescs.resize(m_desc.numInputElements);
 
-    auto device = ctx->getDevice();
+    auto device = context->getDevice();
 
     for (int i = 0; i < m_desc.numInputElements; ++i) {
         m_inputElementDescs[i] = m_desc.inputElementDescs[i];
@@ -1582,6 +1623,7 @@ GraphicsShaderD3D11::GraphicsShaderD3D11(ContextD3D11 *ctx,
         e.InstanceDataStepRate = 0;
         alignedByteOffset = -1;
     }
+    NVFLOW_ASSERT(m_desc.numInputElements);
 
     device->CreateInputLayout(elementDesc.data(), m_desc.numInputElements, m_desc.vs,
                               m_desc.vs_length, &m_inputLayout);
@@ -1596,6 +1638,7 @@ GraphicsShaderD3D11::GraphicsShaderD3D11(ContextD3D11 *ctx,
     blendDesc.RenderTarget[0].DestBlendAlpha =
         convertToD3D11(m_desc.blendState.dstBlendAlpha);
     blendDesc.RenderTarget[0].BlendOpAlpha = convertToD3D11(m_desc.blendState.blendOpAlpha);
+    blendDesc.RenderTarget[0].RenderTargetWriteMask = 0xF;
     device->CreateBlendState(&blendDesc, &m_blenderState);
 
     D3D11_DEPTH_STENCIL_DESC depthDesc = {};
@@ -1632,8 +1675,8 @@ void GraphicsShaderD3D11::setFormats(NvFlowFormat rtFormat, NvFlowFormat dsForma
     m_desc.depthStencilFormat = dsFormat;
 }
 
-TimerD3D11::TimerD3D11(ContextD3D11 *ctx) : Object(ctx->getDeferredRelease()) {
-    auto device = ctx->getDevice();
+TimerD3D11::TimerD3D11(ContextD3D11 *context) : Object(context->getDeferredRelease()), m_state{0} {
+    auto device = context->getDevice();
 
     D3D11_QUERY_DESC queryDesc = {};
     queryDesc.Query = D3D11_QUERY_TIMESTAMP_DISJOINT;
@@ -1649,14 +1692,14 @@ uint64_t TimerD3D11::getGPUBytesUsed() {
     return 0;
 }
 
-EventQueueD3D11::EventQueueD3D11(ContextD3D11 *ctx)
-    : Object(ctx->getDeferredRelease()), m_pushID(0) {}
+EventQueueD3D11::EventQueueD3D11(ContextD3D11 *context)
+    : Object(context->getDeferredRelease()), m_pushID(0) {}
 
 uint64_t EventQueueD3D11::getGPUBytesUsed() {
     return 0;
 }
 
-void EventQueueD3D11::push(uint64_t uid, ContextD3D11 *ctx) {
+void EventQueueD3D11::push(uint64_t uid, ContextD3D11 *context) {
     auto e = getNewEvent();
     e->state = eEventStateActive;
     e->uid = uid;
@@ -1666,12 +1709,12 @@ void EventQueueD3D11::push(uint64_t uid, ContextD3D11 *ctx) {
         D3D11_QUERY_DESC queryDesc = {};
         queryDesc.Query = D3D11_QUERY_EVENT;
         queryDesc.MiscFlags = 0;
-        ctx->getDevice()->CreateQuery(&queryDesc, &e->query);
+        context->getDevice()->CreateQuery(&queryDesc, &e->query);
     }
-    ctx->getContext()->End(e->query.Get());
+    context->getContext()->End(e->query.Get());
 }
 
-int EventQueueD3D11::pop(uint64_t *pUid, ContextD3D11 *ctx) {
+int EventQueueD3D11::pop(uint64_t *pUid, ContextD3D11 *context) {
     HRESULT hr;
     int compute;
     bool valid = false;
@@ -1697,7 +1740,7 @@ int EventQueueD3D11::pop(uint64_t *pUid, ContextD3D11 *ctx) {
     if (!valid) return 1;
 
     auto &minEvent = m_events[minIdx];
-    hr = ctx->getContext()->GetData(minEvent.query.Get(), &compute, sizeof(compute), 0);
+    hr = context->getContext()->GetData(minEvent.query.Get(), &compute, sizeof(compute), 0);
     if (FAILED(hr) || compute != 1) return 1;
 
     if (pUid) *pUid = minEvent.uid;
@@ -1745,6 +1788,8 @@ void ContextD3D11::State::reset() {
     SafeRelease(csUavs);
 
     SafeRelease(computeShader);
+
+    SafeRelease(vertexShader);
     SafeRelease(pixelShader);
     SafeRelease(geometryShader);
     SafeRelease(hullShader);
@@ -1753,6 +1798,116 @@ void ContextD3D11::State::reset() {
 
 ContextD3D11::State::~State() {
     reset();
+}
+
+LUID getAdapterLUID_D3D11(ID3D11Device *d3dDevice) {
+    ComPtr<IDXGIAdapter1> pAdapter1;
+    LUID adapterLuid = {0, 0};
+    if (d3dDevice) {
+        ComPtr<IDXGIDevice> dxgiDevice;
+        if (FAILED(d3dDevice->QueryInterface(IID_PPV_ARGS(&dxgiDevice))))
+            return adapterLuid;
+
+        ComPtr<IDXGIAdapter> pAdapter;
+        if (FAILED(dxgiDevice->GetAdapter(&pAdapter))) {
+            return adapterLuid;
+        }
+
+        if (FAILED(pAdapter->QueryInterface(IID_PPV_ARGS(&pAdapter1)))) {
+            return adapterLuid;
+        }
+    }
+
+    DXGI_ADAPTER_DESC1 desc;
+    pAdapter1->GetDesc1(&desc);
+    return desc.AdapterLuid;
+}
+
+IDXGIAdapter1 *getDXGIAdapterD3D11(ID3D11Device *d3dDevice, HMODULE dxgiModule) {
+    IDXGIFactory4 *pFactory2 = 0;
+    auto createDXGIFactory2 = (HRESULT(WINAPI *)(UINT, const IID *, void **))GetProcAddress(
+        dxgiModule, "CreateDXGIFactory2");
+
+    auto AdapterLUID_D3D11 = getAdapterLUID_D3D11(d3dDevice);
+
+    UINT debugFlags = DXGI_CREATE_FACTORY_DEBUG;
+    if (FAILED(createDXGIFactory2(debugFlags, &IID_IDXGIFactory2, (void **)&pFactory2)))
+        return 0;
+
+    IDXGIAdapter1 *pAdapter1 = 0;
+    for (int adapterIdx = 0; SUCCEEDED(pFactory2->EnumAdapters1(adapterIdx, &pAdapter1));
+         ++adapterIdx) {
+        DXGI_ADAPTER_DESC1 adapterDesc1;
+        pAdapter1->GetDesc1(&adapterDesc1);
+        if (adapterDesc1.AdapterLuid.LowPart == AdapterLUID_D3D11.LowPart &&
+            adapterDesc1.AdapterLuid.HighPart == AdapterLUID_D3D11.HighPart)
+            break;
+        SafeRelease(pAdapter1);
+    }
+
+    SafeRelease(pFactory2);
+    return pAdapter1;
+}
+
+bool FlowDedicatedDeviceAvailableD3D11(NvFlowContext *renderContext) {
+    bool foundDedicatedDevice = 0;
+    HMODULE d3d12module = LoadLibraryW(L"d3d12.dll");
+    HMODULE dxgimodule = LoadLibraryW(L"DXGI.dll");
+    if (d3d12module && dxgimodule && renderContext) {
+        NvFlowContextDescD3D11 renderContextDesc = {};
+        NvFlowUpdateContextDescD3D11(renderContext, &renderContextDesc);
+        auto adapterRender = getDXGIAdapterD3D11(renderContextDesc.device, dxgimodule);
+        auto factory = getDXGIFactoryD3D(adapterRender);
+
+        DXGI_ADAPTER_DESC1 renderDesc;
+        adapterRender->GetDesc1(&renderDesc);
+
+        UINT adapterIdx = 0;
+        IDXGIAdapter1 *adapterTemp = 0;
+        while (SUCCEEDED(factory->EnumAdapters1(adapterIdx, &adapterTemp))) {
+            DXGI_ADAPTER_DESC1 adapterDesc;
+            adapterTemp->GetDesc1(&adapterDesc);
+
+            BOOL sammeLUID =
+                adapterDesc.AdapterLuid.LowPart == renderDesc.AdapterLuid.LowPart &&
+                adapterDesc.AdapterLuid.HighPart == renderDesc.AdapterLuid.HighPart;
+            BOOL softwareAdapter = (adapterDesc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) != 0;
+            auto createDevice = (HRESULT(WINAPI *)(
+                IUnknown *, D3D_FEATURE_LEVEL, const GUID *,
+                void **))GetProcAddress(d3d12module, "D3D12CreateDevice");
+            BOOL supportD3D12 = SUCCEEDED(
+                createDevice(adapterTemp, D3D_FEATURE_LEVEL_11_0, &IID_ID3D12Device, 0));
+            if (!sammeLUID && !softwareAdapter && supportD3D12)
+                foundDedicatedDevice = 1;
+            SafeRelease(adapterTemp);
+            ++adapterIdx;
+        }
+
+        SafeRelease(factory);
+        SafeRelease(adapterRender);
+    }
+
+    if (d3d12module) {
+        FreeLibrary(d3d12module);
+        d3d12module = 0;
+    }
+
+    if (dxgimodule) {
+        FreeLibrary(dxgimodule);
+        dxgimodule = 0;
+    }
+    return foundDedicatedDevice;
+}
+
+bool FlowDedicatedDeviceQueueAvailableD3D11(NvFlowContext *renderContext) {
+    bool available = 0;
+    HMODULE d3d12module = LoadLibraryW(L"d3d12.dll");
+    if (d3d12module) {
+        available = 1;
+        FreeLibrary(d3d12module);
+        d3d12module = 0;
+    }
+    return available;
 }
 
 }  // namespace NvFlow

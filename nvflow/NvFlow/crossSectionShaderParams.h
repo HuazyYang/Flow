@@ -1,5 +1,3 @@
-#ifndef CROSSSECTIONPARAMS_HLSLI
-#define CROSSSECTIONPARAMS_HLSLI
 /*
 * Copyright (c) 2014-2017, NVIDIA CORPORATION.  All rights reserved.
 *
@@ -32,4 +30,3 @@ NvFlowFloat4 backgroundColor;
 NvFlowFloat4 pixelSize;
 NvFlowFloat4 cellColor;
 
-#endif /* CROSSSECTIONPARAMS_HLSLI */

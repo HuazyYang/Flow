@@ -1,4 +1,5 @@
 #include "Context.h"
+#include "ClientHelper.h"
 
 namespace NvFlow {
 
@@ -31,5 +32,19 @@ uint64_t FlowDeferredRelease(float timeoutMS) {
     uint64_t sum = FlowDeferredReleaseD3D11(timeoutMS);
     sum += FlowDeferredReleaseD3D12(timeoutMS);
     return sum;
+}
+IDXGIFactory1 *getDXGIFactoryD3D(IDXGIAdapter1 *pAdapter1) {
+    IDXGIFactory1 *pFactory1 = 0;
+    if (pAdapter1) {
+        IDXGIFactory *pFactory = 0;
+        if (FAILED(pAdapter1->GetParent(IID_PPV_ARGS(&pFactory)))) return 0;
+
+        if (FAILED(pFactory->QueryInterface(IID_PPV_ARGS(&pFactory1)))) {
+            SafeRelease(pFactory);
+            return 0;
+        }
+        SafeRelease(pFactory);
+    }
+    return pFactory1;
 }
 }  // namespace NvFlow

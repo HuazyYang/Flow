@@ -2,6 +2,7 @@
 #define NVFLOWCONTEXTIMPL_H
 #include "NvFlowObjectImpl.h"
 #include <nvflow/NvFlowContext.h>
+#include <nvflow/NvFlowContextExt.h>
 
 struct NvFlowContextObject : NvFlowObject {};
 

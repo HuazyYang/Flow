@@ -7,6 +7,64 @@
 
 namespace NvFlow {
 
+namespace details {
+template <typename T>
+typename std::enable_if<std::is_destructible<T>::value, void>::type destruct(T *ptr) {
+    ptr->~T();
+}
+
+template <typename T>
+typename std::enable_if<!std::is_destructible<T>::value, void>::type destruct(T *ptr) {}
+
+template <typename T, std::enable_if_t<std::is_destructible_v<T>, int> = 0>
+T* destroy_range(T *start, T *end) {
+    while (start != end)
+        (start++)->~T();
+    return start;
+}
+
+template <typename T, std::enable_if_t<!std::is_destructible_v<T>, int> = 0>
+T* destroy_range(T *start, T *end) {
+    return end;
+}
+
+template <typename T>
+T *copy_range(const T *start, const T *end, T *dest) {
+    while (start != end)
+        *dest++ = *start++;
+    return dest;
+}
+
+template <typename T>
+T *copy_construct_range(const T *start, const T *end, T *dest) {
+    while (start != end)
+        *dest++ = ::new T(*start++);
+    return dest;
+}
+
+template <typename T>
+T *move_construct_range(T *start, T *end, T *dest) {
+    while (start != end)
+        ::new (dest++) T(std::move(*start++));
+    return dest;
+}
+
+template <typename T,
+          std::enable_if_t<!std::is_trivially_default_constructible_v<T>, int> = 0>
+T *default_construct_range(T *start, T *end) {
+    while (start != end)
+        ::new (start++) T{};
+    return start;
+}
+
+template <typename T,
+          std::enable_if_t<std::is_trivially_default_constructible_v<T>, int> = 0>
+T *default_construct_range(T *start, T *end) {
+    return end;
+}
+
+}  // namespace details
+
 template <typename T, uint32_t N>
 class VectorCached {
  public:
@@ -18,31 +76,89 @@ class VectorCached {
     using const_reference = const T &;
     static constexpr size_type cached_size = N;
 
-    // Type sanity check
-    /*     static_assert(std::is_trivially_default_constructible_v<value_type> &&
-                          std::is_trivially_destructible_v<value_type> &&
-                          std::is_trivially_copy_constructible_v<value_type> &&
-                          std::is_trivially_move_constructible_v<value_type>,
-                      "None-POD type can not instantiate VectorCached template"); */
+    using iterator = pointer;
+    using const_iterator = const_pointer;
 
-    VectorCached(size_type capacity = cached_size) {
-        m_size = 0;
-        m_capacity = capacity;
-        m_data = allocate(capacity);
-
-        for (size_type i = 0; i < capacity; ++i)
-            ::new (m_data + i) value_type();
-    }
-
-    ~VectorCached() {
-        cleanup(m_data, m_capacity);
-        m_data = nullptr;
-        m_capacity = 0;
+    VectorCached() {
+        m_data = allocate(cached_size);
+        m_capacity = cached_size;
         m_size = 0;
     }
 
-    VectorCached(const VectorCached &) = delete;
-    VectorCached &operator=(const VectorCached &other) = delete;
+    ~VectorCached() { tidy(); }
+
+    VectorCached(const VectorCached &other) {
+        if (this != &other) {
+            size_type new_capacity = other.m_size;
+            m_data = allocate(new_capacity);
+            m_capacity = new_capacity;
+            details::copy_range(other.m_data, other.m_data + other.m_size, m_data);
+            m_size = other.m_size;
+        }
+    }
+
+    VectorCached(VectorCached &&other) {
+        if (this != &other) {
+            if (other.is_cached()) {
+                size_type new_capacity = other.m_size;
+                m_data = allocate(new_capacity);
+                m_capacity = new_capacity;
+                details::copy_range(other.m_data, other.m_data + other.m_size, m_data);
+                m_size = other.m_size;
+            } else {
+                m_data = other.m_data;
+                m_capacity = other.m_capacity;
+                m_size = other.m_size;
+                other.m_data = 0;
+                other.m_capacity = 0;
+                other.m_size = 0;
+            }
+        }
+    }
+
+    VectorCached &operator=(const VectorCached &other) {
+        if (this != &other) {
+            if (m_capacity <= other.m_size) {
+                tidy();
+                size_type new_capacity = other.m_size;
+                m_data = allocate(new_capacity);
+                m_capacity = new_capacity;
+            }
+
+            size_type old_size = m_size;
+
+            if (old_size < other.m_size) {
+                auto last =
+                    details::copy_range(other.m_data, other.m_data + old_size, m_data);
+                last = details::copy_construct_range(other.m_data + old_size,
+                                                     other.m_data + other.m_size, last);
+            } else if (other.m_size < old_size) {
+                details::copy_range(other.m_data, other.m_data + other.m_size, m_data);
+                details::destroy_range(m_data + other.m_size, m_data + m_size);
+            } else
+                details::copy_range(other.m_data, other.m_data + other.m_size, m_data);
+
+            m_size = other.m_size;
+        }
+        return *this;
+    }
+
+    VectorCached &operator=(VectorCached &&other) {
+        tidy();
+        if (other.is_cached()) {
+            size_type new_capacity = other.m_size;
+            m_data = allocate(new_capacity);
+            m_capacity = new_capacity;
+            details::copy_construct_range(other.m_data, other.m_data + other.m_size,
+                                          m_data);
+            m_size = other.m_size;
+        } else {
+            std::swap(m_data, other.m_data);
+            std::swap(m_capacity, other.m_capacity);
+            std::swap(m_size, other.m_size);
+        }
+        return *this;
+    }
 
     reference operator[](size_type idx) {
         check_range(idx);
@@ -55,24 +171,40 @@ class VectorCached {
 
     size_type allocateBack() {
         reserve(m_size + 1);
+        construct(m_data + m_size);
         return m_size++;
     }
 
-    void resize(size_type size) {
-        reserve(size);
-        m_size = size;
+    void resize(size_type new_size) {
+        reserve(new_size);
+
+        if (new_size < m_size)
+            details::destroy_range(m_data + new_size, m_data + m_size);
+        else if (m_size < new_size)
+            details::default_construct_range(m_data + m_size, m_data + new_size);
+
+        m_size = new_size;
     }
+
+    void clear() { resize(0); }
 
     size_type size() const { return m_size; }
 
     void push_back(const T &val) {
-        auto idx = allocateBack();
-        m_data[idx] = val;
+        reserve(m_size + 1);
+        construct(m_data + m_size, val);
+        m_size += 1;
     }
 
     void push_back(T &&val) {
-        auto idx = allocateBack();
-        m_data[idx] = std::forward<T>(val);
+        reserve(m_size + 1);
+        construct(m_data + m_size, std::forward<T>(val));
+        m_size += 1;
+    }
+
+    void pop_back() {
+        check_range(0);
+        destroy(std::addressof(m_data[--m_size]));
     }
 
     T &back() {
@@ -85,41 +217,29 @@ class VectorCached {
         return m_data[m_size - 1];
     }
 
-    VectorCached(VectorCached *rhs) {
-        m_data = rhs->m_data;
-        m_capacity = rhs->m_capacity;
-        m_size = rhs->m_size;
-        if ((uint8_t *)rhs->m_data == rhs->m_cache) {
-            m_data = (value_type *)m_cache;
-            for (size_type i = 0; i < rhs->m_capacity; ++i)
-                m_data[i] = rhs->m_data[i];
-        }
-        rhs->m_data = rhs->m_cache;
-        rhs->m_capacity = cached_size;
-        rhs->m_size = 0;
-    }
+    iterator begin() { return m_data; }
 
-    void reserve(size_type requestedCapacity) {
+    iterator end() { return m_data + m_size; }
+
+    const_iterator begin() const { return m_data; }
+
+    const_iterator end() const { return m_data + m_size; }
+
+    void reserve(size_type new_capacity) {
         size_type capacity;
-        for (capacity = m_capacity; capacity < requestedCapacity; capacity *= 2)
+        for (capacity = m_capacity; capacity < new_capacity; capacity *= 2)
             ;
 
         if (capacity > m_capacity) {
-            auto newData = (value_type *)Allocable::allocate(capacity);
+            auto new_data = allocate(capacity);
 
-            if (newData != m_data) {
-                for (size_type i = 0; i < m_size; ++i) {
-                    auto newVal = ::new (newData + i) value_type();
-                    auto oldVal = &m_data[i];
-                    *newVal = std::move(*oldVal);
-                }
+            if (new_data != m_data) {
+                details::move_construct_range(m_data, m_data + m_size, new_data);
+                details::destroy_range(m_data, m_data + m_size);
+                deallocate(m_data,  m_capacity);
+                m_data = new_data;
             }
 
-            for (size_type i = m_size; i < capacity; ++i)
-                ::new (newData + i) value_type();
-
-            if (newData != m_data) cleanup(m_data, m_capacity);
-            m_data = newData;
             m_capacity = capacity;
         }
     }
@@ -129,6 +249,7 @@ class VectorCached {
         if (idx >= m_size) NVFLOW_INDEX_OUT_OF_RANGE_ERROR();
     }
 
+    // Allocator
     value_type *allocate(size_type capacity) {
         if (capacity > cached_size)
             return (value_type *)Allocable::allocate(sizeof(value_type) * capacity);
@@ -136,11 +257,33 @@ class VectorCached {
             return (value_type *)m_cache;
     }
 
-    void cleanup(T *data, size_type capacity) {
-        for (size_t i = 0; i < capacity; ++i)
-            data[i].~value_type();
-        if (data != (T *)m_cache) Allocable::deallocate(data);
+    void deallocate(value_type *p, size_type count) {
+        if (count <= cached_size)
+            return;
+        else
+            Allocable::deallocate(p);
     }
+
+    template <typename... Args>
+    void construct(value_type *p, Args &&...args) {
+        ::new (p) value_type(std::forward<Args>(args)...);
+    }
+
+    void destroy(pointer p) { details::destruct(p); }
+
+    void tidy() {
+        if (m_size) {
+            details::destroy_range(m_data, m_data + m_size);
+            m_size = 0;
+        }
+        if (m_capacity) {
+            deallocate(m_data, m_capacity);
+            m_data = nullptr;
+            m_capacity = 0;
+        }
+    }
+
+    bool is_cached() const { return (const uint8_t *)m_data == m_cache; }
 
     value_type *m_data;
     size_type m_capacity;
@@ -183,11 +326,12 @@ class VectorCached2D {
         }
     };
 
-    VectorCached2D(size_type capacityX = M, size_type capacityY = N) {
+    VectorCached2D() {
+        uint32_t capacityX = M, capacityY = N;
         m_sizeX = 0;
         m_sizeY = 0;
-        m_capacityX = capacityX;
-        m_capacityY = capacityY;
+        m_capacityX = M;
+        m_capacityY = N;
         m_data = allocate(capacityX, capacityY);
         size_type capacity = capacityX * capacityY;
 
@@ -249,7 +393,7 @@ class VectorCached2D {
                         ::new (newData + (i + j * capacityX)) value_type();
                     else {
                         auto newVal =
-                            ::new (newData + (i + j * capacityX + i)) value_type();
+                            ::new (newData + (i + j * capacityX)) value_type();
                         auto oldVal = &m_data[i + m_capacityX * j];
                         *newVal = std::move(*oldVal);
                     }
@@ -264,7 +408,7 @@ class VectorCached2D {
 
  private:
     void check_range(size_type ix) const {
-        if (ix >= m_sizeX) NVFLOW_INDEX_OUT_OF_RANGE_ERROR();
+        if (ix >= m_sizeY) NVFLOW_INDEX_OUT_OF_RANGE_ERROR();
     }
 
     value_type *allocate(size_type capacityX, size_type capacityY) {
@@ -291,29 +435,5 @@ class VectorCached2D {
 };
 
 };  // namespace NvFlow
-
-namespace std {
-
-template <typename T, uint32_t N>
-T *begin(NvFlow::VectorCached<T, N> &con) {
-    return con.data();
-}
-
-template <typename T, uint32_t N>
-const T *begin(const NvFlow::VectorCached<T, N> &con) {
-    return con.data();
-}
-
-template <typename T, uint32_t N>
-T *end(NvFlow::VectorCached<T, N> &con) {
-    return con.data() + con.size();
-}
-
-template <typename T, uint32_t N>
-const T *end(const NvFlow::VectorCached<T, N> &con) {
-    return con.data() + con.size();
-}
-
-};  // namespace std
 
 #endif /* VECTORCACHED_H */

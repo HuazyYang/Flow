@@ -87,7 +87,7 @@ function(nvflow_add_shader_object_headers)
         list(APPEND output_file_list ${output_file_path})
         list(APPEND cmd_line "/Fh;${output_file_path}")
 
-        list(APPEND cmd_line "$<IF:$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>,/Zi,/Zd>")
+        list(APPEND cmd_line "$<$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>:/Zi>")
         list(APPEND cmd_line "$<$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>:/Od>")
 
         # Re-arrange entry file to last
@@ -98,20 +98,24 @@ function(nvflow_add_shader_object_headers)
         add_custom_command(OUTPUT ${output_file_path}
             COMMAND ${FXC_COMPILER} ${cmd_line}
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-            DEPENDS ${entry_file_path} ${include_file_list} ${nvflow_OUTPUT_DIRECTORY}
+            DEPENDS ${entry_file_path} ${include_file_list}
             COMMAND_EXPAND_LISTS
         )
     endforeach(cmd shader_cfg_lines)
 
     add_custom_target(
         ${nvflow_TARGET}
-        DEPENDS ${output_file_list}
+        DEPENDS  ${nvflow_OUTPUT_DIRECTORY} ${output_file_list}
         SOURCES ${include_file_list} ${entry_file_list}
     )
 
     # Set a header include directory path in parent scope
-    define_property(TARGET PROPERTY OBJECT_HEADER_PUBLIC_DIR BRIEF_DOCS "Shader object header file include directory")
-    define_property(TARGET PROPERTY OBJECT_HEADER_FILES BRIEF_DOCS "Shader object header file list")
+    define_property(TARGET PROPERTY OBJECT_HEADER_PUBLIC_DIR
+        BRIEF_DOCS "Shader object header file include directory"
+        FULL_DOCS "Shader object header file include directory")
+    define_property(TARGET PROPERTY OBJECT_HEADER_FILES
+        BRIEF_DOCS "Shader object header file list"
+        FULL_DOCS "Shader object header file list")
     set_property(TARGET ${nvflow_TARGET}
         PROPERTY
         OBJECT_HEADER_OUTPUT_DIR ${nvflow_OUTPUT_DIRECTORY}

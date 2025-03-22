@@ -232,7 +232,7 @@ int main(int argc, char *argv[]) {
             fprintf(stdout, "Write: %s <- %s\n", output_info.filepath.string().c_str(),
                     output_info.mapped_filepath.string().c_str());
 
-            std::ofstream fout{output_info.filepath};
+            std::ofstream fout{output_info.filepath, std::ios::binary};
 
             fout.write((const char *)output_info.source->contents.data(),
                        output_info.source->contents.size());

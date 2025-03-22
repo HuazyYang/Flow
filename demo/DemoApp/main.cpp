@@ -48,6 +48,8 @@
 #include <thread>
 #include "traceUtils.h"
 
+static int gInitSceneIndex = 0;
+
 const int gWinWdefault = 2560 / 2;
 const int gWinHdefault = 1600 / 2;
 int gWinW = gWinWdefault;
@@ -487,23 +489,55 @@ void mouseEvent(SDL_Event& e)
 	}
 }
 
-int main(int argc, char** argv)
+#include <dxgidebug.h>
+
+void reportDXGIDebugInfo() {
+    HMODULE hdxgidebug = LoadLibraryW(L"Dxgidebug.dll");
+    auto pfnDXGIGetDebugInterface = (HRESULT(*)(const IID*, void**))
+        GetProcAddress(hdxgidebug, "DXGIGetDebugInterface");
+    IDXGIDebug* pDXGIDebug;
+    pfnDXGIGetDebugInterface(&IID_IDXGIDebug, (void**)&pDXGIDebug);
+    pDXGIDebug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_SUMMARY);
+    pDXGIDebug->Release();
+    FreeLibrary(hdxgidebug);
+}
+
+#ifdef WIN32
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine,
+                   int nCmdShow)
+#else
+int main(int __argc, const char** __argv)
+#endif
 {
-	for (int i = 1; i < argc; i++)
-	{
-		if (0 == strcmp(argv[i], "-d3d12"))
-		{
-			gUseD3D12 = true;
-		}
-	}
+    int argc __argc;
+    char** argv = __argv;
+    for (int i = 1; i < argc; i++) {
+        if (0 == strcmp(argv[i], "-d3d12")) {
+            gUseD3D12 = true;
+        } else if (0 == strcmp(argv[i], "-scene")) {
+            if (i + 1 < argc) {
+                int sceneIndex = strtol(argv[i + 1], NULL, 10);
+                if (sceneIndex >= 0 && sceneIndex < 19) {
+                    gInitSceneIndex = sceneIndex;
+                } else {
+                    fprintf(stderr,
+                            "Invalid scene index, scene index must be in "
+                            "range [0, 19), but %d is given\n",
+                            sceneIndex);
+                    return -1;
+                }
+            } else {
+                fprintf(stderr, "Invalid scene argument, please use [-scene <num>]\n");
+            }
+        }
+    }
 
-	if (SDL_Init(SDL_INIT_VIDEO))
-	{
-		fprintf(stderr, "Failed to init SDL: %s\n", SDL_GetError());
-		return 1;
-	}
+    if (SDL_Init(SDL_INIT_VIDEO)) {
+        fprintf(stderr, "Failed to init SDL: %s\n", SDL_GetError());
+        return 1;
+    }
 
-	// preserve across transitions
+        // preserve across transitions
 	gCamera.init(gWinW, gWinH);
 
 	for (; gAppRunCount > 0; gAppRunCount--)
@@ -614,5 +648,7 @@ int main(int argc, char** argv)
 
 	SDL_Quit();
 
-	return 0;
+    reportDXGIDebugInfo();
+
+    return 0;
 }

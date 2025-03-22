@@ -1,5 +1,3 @@
-#ifndef HEREAFTER_DEPTHDOWNSAMPLESHADERPARAMS_H
-#define HEREAFTER_DEPTHDOWNSAMPLESHADERPARAMS_H
 
 NvFlowFloat4 uvScale;
 
@@ -17,5 +15,3 @@ float2 leftX;
 float2 rightX;
 float2 upY;
 float2 downY;
-
-#endif /* HEREAFTER_DEPTHDOWNSAMPLESHADERPARAMS_H */

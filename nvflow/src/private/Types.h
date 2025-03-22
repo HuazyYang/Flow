@@ -15,23 +15,25 @@ char (*countofHelper(const T (&Array)[N]))[N];
 
 #define countof(Array) sizeof(*countofHelper(Array))
 
-// Constants
-constexpr float FLOAT_0_5 = 0.5f;
-constexpr float FLOAT_1_0 = 1.f;
-constexpr float FLOAT_1_5 = 1.5f;
-
-uint32_t getFormatSizeInBytes(NvFlowFormat format);
-
-DXGI_FORMAT convertToDXGI(NvFlowFormat format);
-
-NvFlowFormat convertToNvFlow(DXGI_FORMAT format);
-
 template <int N, typename T>
 T alignUp(T ptr) {
     static_assert((N & (N - 1)) == 0, "alignUp dividend must be power of 2");
     constexpr T mask = ~T(N - 1);
     return (ptr + T(N - 1)) & mask;
 }
+
+template <typename T>
+void swap(T& left, T& right) {
+    T temp = std::move(left);
+    left = std::move(right);
+    right = std::move(temp);
+}
+
+uint32_t getFormatSizeInBytes(NvFlowFormat format);
+
+DXGI_FORMAT convertToDXGI(NvFlowFormat format);
+
+NvFlowFormat convertToNvFlow(DXGI_FORMAT format);
 
 NvFlowDim getTileDim(NvFlowFormat format);
 
@@ -63,8 +65,11 @@ enum CommonErrorType {
 
 void HandleError(const char* file, uint32_t line, const char* pos, CommonErrorType errType);
 
+#define NVFLOW_CREATE_SHADER_ARGS0(name) g_##name, sizeof(g_##name)
+#define NVFLOW_CREATE_SHADER_ARGS(name) g_##name, sizeof(g_##name), L#name
+
 }  // namespace NvFlow
 
-#include "NvFlowMath.h"
+#include "FlowMath.h"
 
 #endif /* TYPES_H */

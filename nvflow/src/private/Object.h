@@ -12,10 +12,12 @@ class Object : public NvFlowObject, public Allocable {
     uint32_t addRef() override;
     uint32_t release() override;
 
-    DeferredRelease* getDeferredRelease() const;
-
     uint64_t getGPUBytesUsed() override;  // Default to zero
 
+   //  virtual uint32_t addRefInternal() = 0;
+   //  virtual uint32_t releaseInternal() = 0;
+
+    DeferredRelease* getDeferredRelease() const;
  protected:
     Object();
     Object(DeferredRelease* deferredRelease);
@@ -25,9 +27,11 @@ class Object : public NvFlowObject, public Allocable {
     Object(const Object&) = delete;
     Object& operator=(const Object&) = delete;
 
-    std::atomic<uint32_t> m_refCount = 1;
+    std::atomic<uint32_t> m_refCount;
     DeferredRelease* m_deferredRelease;
 };
+
+// struct Object_vtbl // sizeof=0x30
 
 }  // namespace NvFlow
 

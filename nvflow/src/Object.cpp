@@ -7,10 +7,9 @@ inline uint32_t Object::addRef() {
     return ref;
 }
 
-Object::Object() : m_deferredRelease(nullptr) {
-}
+Object::Object() : m_refCount(1), m_deferredRelease(nullptr) {}
 
-Object::Object(DeferredRelease* deferredRelease) : m_deferredRelease(deferredRelease) {
+Object::Object(DeferredRelease* deferredRelease) : m_refCount{1}, m_deferredRelease(deferredRelease) {
     if (m_deferredRelease) m_deferredRelease->registerObject(this);
 }
 
@@ -23,6 +22,8 @@ uint32_t Object::release() {
         this->m_deferredRelease = nullptr;
         this->addRef();
         deferredRelease->pushForRelease(this);
+    } else {
+        delete this;
     }
     return 0;
 }

@@ -1,5 +1,3 @@
-#ifndef HEREAFTER_VOLUMERENDERSHADERPARAMS_H
-#define HEREAFTER_VOLUMERENDERSHADERPARAMS_H
 
 /*
  * Copyright (c) 2014-2017, NVIDIA CORPORATION.  All rights reserved.
@@ -74,4 +72,3 @@ NvFlowFloat4 colorMapRange_layer3;
 NvFlowFloat4 alphaCompMask_layer3;
 NvFlowFloat4 intensityCompMask_layer3;
 
-#endif /* HEREAFTER_VOLUMERENDERSHADERPARAMS_H */

@@ -8,13 +8,13 @@ static void *(*g_FlowMalloc)(size_t) = malloc;
 
 static void (*g_FlowFree)(void *) = free;
 
-void *Allocable::operator new(std::size_t count) {
+void *Allocable::operator new(size_t count) {
     void *p = malloc(count);
     if (!p) throw std::bad_alloc();
     return p;
 }
 
-void *Allocable::operator new[](std::size_t count) {
+void *Allocable::operator new[](size_t count) {
     void *p = malloc(count);
     if (!p) throw std::bad_alloc();
     return p;
@@ -28,7 +28,7 @@ void Allocable::operator delete[](void *ptr) {
     free(ptr);
 }
 
-void *Allocable::allocate(std::size_t sz) {
+void *Allocable::allocate(size_t sz) {
     return malloc(sz);
 }
 

@@ -1,6 +1,9 @@
 #ifndef ALLOCABLE_H
 #define ALLOCABLE_H
-#include <cstdlib>
+#include <stddef.h>
+#if NVFLOW__USE_MICROSOFT_VLD
+#include <vld.h>
+#endif
 
 namespace NvFlow {
 
@@ -10,13 +13,13 @@ void FlowSetFreeFunc(void (*free)(void*));
 
 class Allocable {
  public:
-    void* operator new(std::size_t count);
-    void* operator new[](std::size_t count);
+    void* operator new(size_t count);
+    void* operator new[](size_t count);
 
     void operator delete(void* ptr);
     void operator delete[](void* ptr);
 
-    static void* allocate(std::size_t sz);
+    static void* allocate(size_t sz);
     static void deallocate(void* ptr);
 
  protected:

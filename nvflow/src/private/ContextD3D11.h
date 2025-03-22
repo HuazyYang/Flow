@@ -442,7 +442,7 @@ struct ContextD3D11 : Object, Context {
 
     void timerEnd(Timer *timer) override;
 
-    int timerGetResult(Timer *timer, float *timeGPU, float *timeCPU) override;
+    NvFlowResult timerGetResult(Timer *timer, float *timeGPU, float *timeCPU) override;
 
     void transitionToCommonState(Resource *resource) override;
 
@@ -477,6 +477,7 @@ struct ContextD3D11 : Object, Context {
     static NvFlowDim extractDim(ID3D11View *srv);
 
     ContextD3D11(const NvFlowContextDescD3D11 *pdesc);
+    ~ContextD3D11();
 
     ID3D11Device *getDevice();
     ID3D11DeviceContext *getContext();
@@ -563,15 +564,15 @@ struct ContextD3D11 : Object, Context {
     };
 
  protected:
-    ComPtr<ID3D11Device> m_device;
-    ComPtr<ID3D11DeviceContext> m_deviceContext;
-    ComPtr<ID3DUserDefinedAnnotation> m_d3dAnnotation;
-    ComPtr<ID3D11SamplerState> m_sampler0;
-    ComPtr<ID3D11SamplerState> m_sampler1;
-    ComPtr<ID3D11SamplerState> m_sampler2;
-    ComPtr<ID3D11SamplerState> m_sampler3;
-    ComPtr<ID3D11SamplerState> m_sampler4;
-    ComPtr<ID3D11SamplerState> m_sampler5;
+    ID3D11Device *m_device;
+    ID3D11DeviceContext *m_deviceContext;
+    ID3DUserDefinedAnnotation *m_d3dAnnotation;
+    ID3D11SamplerState *m_sampler0;
+    ID3D11SamplerState *m_sampler1;
+    ID3D11SamplerState *m_sampler2;
+    ID3D11SamplerState *m_sampler3;
+    ID3D11SamplerState *m_sampler4;
+    ID3D11SamplerState *m_sampler5;
     bool m_VTRSupportChecked;
     bool m_VTRSupported;
 

@@ -1,5 +1,3 @@
-#ifndef COMPOSITESHADERPARAMS_HLSLI
-#define COMPOSITESHADERPARAMS_HLSLI
 
 NvFlowFloat4 uvScale;
 
@@ -24,6 +22,3 @@ NvFlowUint compositeMode;
 float depthAlphaThreshold;
 float depthIntensityThreshold;
 float pad1;
-
-
-#endif /* COMPOSITESHADERPARAMS_HLSLI */

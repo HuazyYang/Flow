@@ -1,5 +1,3 @@
-#ifndef HEREAFTER_VOLUMESHADOWSHADERPARAMS_H
-#define HEREAFTER_VOLUMESHADOWSHADERPARAMS_H
 
 /*
  * Copyright (c) 2014-2017, NVIDIA CORPORATION.  All rights reserved.
@@ -46,4 +44,3 @@ NvFlowFloat4 shadowBlendCompMask;
 NvFlowShaderLinearParams exportParams;
 NvFlowShaderLinearParams importParams;
 
-#endif /* HEREAFTER_VOLUMESHADOWSHADERPARAMS_H */

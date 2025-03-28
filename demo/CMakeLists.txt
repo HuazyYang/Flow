@@ -85,7 +85,7 @@ set_target_properties(DemoAppD3D12 PROPERTIES
 target_link_libraries(DemoAppD3D12 ${NvFlowLib_LINKED} SDL2)
 add_dependencies(DemoAppD3D12 DemoAppShaders)
 
-add_executable(NvFlowDemoApp WIN32)
+add_executable(NvFlowDemoApp)
 set_target_properties(NvFlowDemoApp PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<CONFIG>"
 )
@@ -105,7 +105,7 @@ file(GLOB DemoApp_SOURCES
 )
 
 target_sources(NvFlowDemoApp PRIVATE ${DemoApp_SOURCES})
-target_link_libraries(NvFlowDemoApp ${NvFlowLib_LINKED} SDL2 "dxguid.lib")
+target_link_libraries(NvFlowDemoApp ${NvFlowLib_LINKED} SDL2 SDL2main "dxguid.lib")
 add_dependencies(NvFlowDemoApp NvFlowDemoData DemoAppShaders)
 target_include_directories(NvFlowDemoApp PRIVATE "$<BUILD_INTERFACE:${NvFlowDemo_SHADER_HEADER_OUTPUT_DIR}>")
 target_compile_definitions(NvFlowDemoApp PRIVATE "DLL_SUFFIX=${DemoApp_POSTFIX}" "_CRT_SECURE_NO_WARNINGS")

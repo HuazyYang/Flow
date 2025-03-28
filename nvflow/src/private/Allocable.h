@@ -1,9 +1,6 @@
 #ifndef ALLOCABLE_H
 #define ALLOCABLE_H
 #include <stddef.h>
-#if NVFLOW__USE_MICROSOFT_VLD
-#include <vld.h>
-#endif
 
 namespace NvFlow {
 

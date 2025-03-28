@@ -287,7 +287,7 @@ struct EventQueueD3D11 : Object, EventQueue {
 
     void push(uint64_t uid, ContextD3D11 *ctx);
 
-    int pop(uint64_t *pUid, ContextD3D11 *ctx);
+    NvFlowResult pop(uint64_t *pUid, ContextD3D11 *ctx);
 
     enum EventState : uint32_t { eEventStateInactive = 0, eEventStateActive = 1 };
 
@@ -392,11 +392,11 @@ struct ContextD3D11 : Object, Context {
                               const NvFlowDrawParams *params) override;
 
     void eventQueuePush(EventQueue *eventQueueIn, uint64_t uid) override;
-    int eventQueuePop(EventQueue *eventQueueIn, uint64_t *pUid) override;
+    NvFlowResult eventQueuePop(EventQueue *eventQueueIn, uint64_t *pUid) override;
 
     int is_VTR_supported() override;
 
-    NvFlowMappedData *map(NvFlowMappedData *result, Texture3D *buffer) override;
+    NvFlowMappedData map(Texture3D *buffer) override;
 
     void *map(Buffer *buffer) override;
 
@@ -408,7 +408,7 @@ struct ContextD3D11 : Object, Context {
 
     void *map(VertexBuffer *buffer) override;
 
-    NvFlowMappedData *mapDownload(NvFlowMappedData *result, Texture3D *buffer) override;
+    NvFlowMappedData mapDownload(Texture3D *buffer) override;
 
     void *mapDownload(Buffer *buffer) override;
 

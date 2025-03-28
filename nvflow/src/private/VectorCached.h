@@ -190,6 +190,8 @@ class VectorCached {
 
     size_type size() const { return m_size; }
 
+    bool empty() const { return !m_size; }
+
     void push_back(const T &val) {
         reserve(m_size + 1);
         construct(m_data + m_size, val);

@@ -1,6 +1,9 @@
 #include "Allocable.h"
 #include <malloc.h>
 #include <exception>
+#if NVFLOW__USE_MICROSOFT_VLD
+#include <vld.h>
+#endif
 
 namespace NvFlow {
 

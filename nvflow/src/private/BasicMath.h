@@ -10,7 +10,7 @@ inline T min(const T &left, const T &right) {
 }
 
 template <typename T>
-inline T max(const T &left, const T &right) {
+inline constexpr T max(const T &left, const T &right) {
     return left < right ? right : left;
 }
 

@@ -625,7 +625,7 @@ void ContextD3D11::eventQueuePush(EventQueue *eventQueueIn, uint64_t uid) {
     eventQueue->push(uid, this);
 }
 
-int ContextD3D11::eventQueuePop(EventQueue *eventQueueIn, uint64_t *pUid) {
+NvFlowResult ContextD3D11::eventQueuePop(EventQueue *eventQueueIn, uint64_t *pUid) {
     auto eventQueue = implCast<EventQueueD3D11>(eventQueueIn);
     return eventQueue->pop(pUid, this);
 }
@@ -641,15 +641,16 @@ int ContextD3D11::is_VTR_supported() {
     return checkVTR(getDevice());
 }
 
-NvFlowMappedData *ContextD3D11::map(NvFlowMappedData *result, Texture3D *buffer) {
+NvFlowMappedData ContextD3D11::map(Texture3D *buffer) {
     auto texD3D11 = implCast<Texture3DD3D11>(buffer);
+    NvFlowMappedData result;
     if (texD3D11->m_desc.uploadAccess) {
         D3D11_MAPPED_SUBRESOURCE mapped;
         getContext()->Map(texD3D11->m_uploadTexture.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0,
                           &mapped);
-        memcpy(result, &mapped, sizeof(mapped));
+        memcpy(&result, &mapped, sizeof(mapped));
     } else {
-        ZeroMemory(result, sizeof(NvFlowMappedData));
+        ZeroMemory(&result, sizeof(NvFlowMappedData));
     }
     return result;
 }
@@ -697,15 +698,14 @@ void *ContextD3D11::map(VertexBuffer *buffer) {
     return mapped.pData;
 }
 
-NvFlowMappedData *ContextD3D11::mapDownload(NvFlowMappedData *result, Texture3D *buffer) {
+NvFlowMappedData ContextD3D11::mapDownload(Texture3D *buffer) {
+    NvFlowMappedData result = {};
     auto texD3D11 = implCast<Texture3DD3D11>(buffer);
     if (texD3D11->m_desc.downloadAccess) {
         D3D11_MAPPED_SUBRESOURCE mapped;
         getContext()->Map(texD3D11->m_downloadTexture.Get(), 0, D3D11_MAP_READ,
                           D3D11_MAP_FLAG_DO_NOT_WAIT, &mapped);
-        memcpy(result, &mapped, sizeof(mapped));
-    } else {
-        ZeroMemory(result, sizeof(NvFlowMappedData));
+        memcpy(&result, &mapped, sizeof(mapped));
     }
     return result;
 }
@@ -802,12 +802,13 @@ NvFlowResult ContextD3D11::timerGetResult(Timer *timerIn, float *timeGPU, float 
     HRESULT hr;
     auto context = getContext();
     D3D11_QUERY_DATA_TIMESTAMP_DISJOINT tsDisjoint;
-    INT64 tsBegin, tsEnd;
+    UINT64 tsBegin, tsEnd;
 
-    hr = context->GetData(timer->m_disjoint.Get(), &tsDisjoint, sizeof(tsDisjoint), 0);
+    hr = context->GetData(timer->m_disjoint.Get(), nullptr, 0, 0);
     if (FAILED(hr))
         return eNvFlowFail;
 
+    context->GetData(timer->m_disjoint.Get(), &tsDisjoint, sizeof(tsDisjoint), 0);
     if (tsDisjoint.Disjoint)
         return eNvFlowFail;
 
@@ -819,13 +820,16 @@ NvFlowResult ContextD3D11::timerGetResult(Timer *timerIn, float *timeGPU, float 
     if (FAILED(hr))
         return eNvFlowFail;
 
-    float tsDiff = float(tsEnd - tsBegin);
-    float msGPU = tsDiff / float(tsDisjoint.Frequency);
+    float Diff = tsEnd - tsBegin;
+    float Frequency_low = tsDisjoint.Frequency;
+
+    float timems = Diff / Frequency_low;
 
     float msCPU = (double)(timer->m_cpuEnd.QuadPart - timer->m_cpuBegin.QuadPart) /
                   (double)timer->m_cpuFreq.QuadPart;
 
-    if (timeGPU) *timeGPU = msGPU;
+    if (timeGPU)
+        *timeGPU = timems;
     if (timeCPU) *timeCPU = msCPU;
 
     timer->m_state = 0;
@@ -1714,7 +1718,7 @@ void EventQueueD3D11::push(uint64_t uid, ContextD3D11 *context) {
     context->getContext()->End(e->query.Get());
 }
 
-int EventQueueD3D11::pop(uint64_t *pUid, ContextD3D11 *context) {
+NvFlowResult EventQueueD3D11::pop(uint64_t *pUid, ContextD3D11 *context) {
     HRESULT hr;
     int compute;
     bool valid = false;
@@ -1737,15 +1741,17 @@ int EventQueueD3D11::pop(uint64_t *pUid, ContextD3D11 *context) {
         }
     }
 
-    if (!valid) return 1;
+    if (!valid)
+        return eNvFlowFail;
 
     auto &minEvent = m_events[minIdx];
     hr = context->getContext()->GetData(minEvent.query.Get(), &compute, sizeof(compute), 0);
-    if (FAILED(hr) || compute != 1) return 1;
+    if (FAILED(hr) || compute != 1)
+        return eNvFlowFail;
 
     if (pUid) *pUid = minEvent.uid;
     minEvent.state = eEventStateInactive;
-    return 0;
+    return eNvFlowSuccess;
 }
 
 EventQueueD3D11::Event *EventQueueD3D11::getNewEvent() {

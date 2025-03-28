@@ -405,10 +405,8 @@ NV_FLOW_API NvFlowResourceRW* NvFlowTexture3DGetResourceRW(NvFlowTexture3D* tex)
 
 NV_FLOW_API NvFlowMappedData NvFlowTexture3DMap(NvFlowContext* context,
                                                 NvFlowTexture3D* tex) {
-    NvFlowMappedData mapped;
-    NvFlow::implCast<NvFlow::Context>(context)->map(
-        &mapped, NvFlow::implCast<NvFlow::Texture3D>(tex));
-    return mapped;
+    return NvFlow::implCast<NvFlow::Context>(context)->map(
+        NvFlow::implCast<NvFlow::Texture3D>(tex));
 }
 
 NV_FLOW_API void NvFlowTexture3DUnmap(NvFlowContext* context, NvFlowTexture3D* tex) {
@@ -423,10 +421,8 @@ NV_FLOW_API void NvFlowTexture3DDownload(NvFlowContext* context, NvFlowTexture3D
 
 NV_FLOW_API NvFlowMappedData NvFlowTexture3DMapDownload(NvFlowContext* context,
                                                         NvFlowTexture3D* tex) {
-    NvFlowMappedData mapped;
-    NvFlow::implCast<NvFlow::Context>(context)->mapDownload(
-        &mapped, NvFlow::implCast<NvFlow::Texture3D>(tex));
-    return mapped;
+    return NvFlow::implCast<NvFlow::Context>(context)->mapDownload(
+        NvFlow::implCast<NvFlow::Texture3D>(tex));
 }
 
 NV_FLOW_API void NvFlowTexture3DUnmapDownload(NvFlowContext* context,

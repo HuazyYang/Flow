@@ -19,8 +19,8 @@ bool Context::flushRequestPop() {
     m_flushRequestPending = false;
     return prev;
 }
-void Context::profileGroupBegin(const wchar_t *) {
-}
+
+void Context::profileGroupBegin(const wchar_t *) {}
 void Context::profileGroupEnd() {
 }
 void Context::profileItemBegin(const wchar_t *) {

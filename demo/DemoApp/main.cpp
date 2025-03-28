@@ -502,15 +502,8 @@ void reportDXGIDebugInfo() {
     FreeLibrary(hdxgidebug);
 }
 
-#ifdef WIN32
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine,
-                   int nCmdShow)
-#else
-int main(int __argc, const char** __argv)
-#endif
+int main(int argc, char** argv)
 {
-    int argc __argc;
-    char** argv = __argv;
     for (int i = 1; i < argc; i++) {
         if (0 == strcmp(argv[i], "-d3d12")) {
             gUseD3D12 = true;

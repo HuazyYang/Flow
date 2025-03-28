@@ -71,7 +71,9 @@ struct Texture3D : NvFlowTexture3D {
     NvFlowTexture3DDesc m_desc;
 };
 
-struct Texture2DCrossAdapter : NvFlowTexture2DCrossAdapter {};
+struct Texture2DCrossAdapter : NvFlowTexture2DCrossAdapter {
+    NvFlowTexture2DDesc m_desc;
+};
 
 struct ResourceReference : NvFlowResourceReference {};
 
@@ -140,7 +142,7 @@ struct Context : NvFlowContext {
 
     virtual ConstantBuffer *createConstantBuffer(const NvFlowConstantBufferDesc *desc) = 0;
 
-    virtual NvFlowMappedData *map(NvFlowMappedData *result, Texture3D *buffer) = 0;
+    virtual NvFlowMappedData map(Texture3D *buffer) = 0;
 
     virtual void *map(Buffer *buffer) = 0;
 
@@ -194,7 +196,7 @@ struct Context : NvFlowContext {
 
     virtual void download(Texture3D *buffer) = 0;
 
-    virtual NvFlowMappedData *mapDownload(NvFlowMappedData *result, Texture3D *buffer) = 0;
+    virtual NvFlowMappedData mapDownload(Texture3D *buffer) = 0;
 
     virtual void *mapDownload(Buffer *buffer) = 0;
 
@@ -290,7 +292,7 @@ struct Context : NvFlowContext {
 
     virtual void eventQueuePush(EventQueue *eventQueueIn, uint64_t uid) = 0;
 
-    virtual int eventQueuePop(EventQueue *eventQueueIn, uint64_t *pUid) = 0;
+    virtual NvFlowResult eventQueuePop(EventQueue *eventQueueIn, uint64_t *pUid) = 0;
 
     virtual void profileGroupBegin(const wchar_t *);
     virtual void profileGroupEnd();

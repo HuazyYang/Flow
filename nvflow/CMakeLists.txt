@@ -30,7 +30,7 @@ set_target_properties(
     PDB_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<CONFIG>"
 )
 
-target_link_libraries(NvFlow PRIVATE "dxguid.lib" vld)
+target_link_libraries(NvFlow PRIVATE "dxguid.lib" "$<${NVFLOW__USE_MICROSOFT_VLD}:vld>")
 
 add_dependencies(NvFlow NvFlowShaders)
 
